@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 
 // === CONSTANTS ===
 const PRODUCE_TYPES = ['Fruit', 'Vegetable', 'Bread', 'Meat', 'Dairy', 'Canned', 'Frozen', 'Beverage', 'Snack', 'Condiment', 'Baking', 'Other'];
+const TEMPLATE_ICONS = ['🛒', '🥛', '🍞', '🥚', '🍎', '🥬', '🍗', '🥩', '🍝', '🍛', '☕', '🧺'];
 
 const TEMPLATE_CATEGORIES = {
   BASICS: 'Basics',
@@ -143,6 +144,7 @@ export default function App() {
   const [databaseSearch, setDatabaseSearch] = useState('');
   const [showItemDatabase, setShowItemDatabase] = useState(false);
   const [showTemplateEditor, setShowTemplateEditor] = useState(false);
+  const [showIconPicker, setShowIconPicker] = useState(false);
   const [editingTemplateKey, setEditingTemplateKey] = useState(null);
   const [listToDelete, setListToDelete] = useState(null);
 
@@ -186,6 +188,7 @@ export default function App() {
   const closeTemplateEditor = () => {
     setShowTemplateEditor(false);
     setEditingTemplateKey(null);
+    setShowIconPicker(false);
   };
 
   const startEditingTemplate = (key) => {
@@ -194,7 +197,20 @@ export default function App() {
 
   const saveTemplate = (key, updatedTemplate) => {
     setTemplates(prev => ({ ...prev, [key]: updatedTemplate }));
+    setItemDatabase(prev => {
+      const names = new Set(prev.map(db => db.name.toLowerCase().trim()));
+      const additions = [];
+      updatedTemplate.items.forEach(item => {
+        const name = (item.name || '').trim();
+        if (name && !names.has(name.toLowerCase())) {
+          names.add(name.toLowerCase());
+          additions.push({ id: generateId(), name, brand: item.brand || '', store: item.store || '', produceType: item.produceType || '', quantity: 0, unit: '' });
+        }
+      });
+      return additions.length > 0 ? [...prev, ...additions] : prev;
+    });
     setEditingTemplateKey(null);
+    setShowIconPicker(false);
   };
 
   const addNewTemplate = () => {
@@ -440,11 +456,18 @@ export default function App() {
             <div>
               <div style={{ marginBottom: '15px', paddingBottom: '15px', borderBottom: '1px solid #eee' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ fontSize: '24px' }}>{template.icon}</span>
-                  <strong style={{ fontSize: '18px' }}>{template.name}</strong>
+                  <button onClick={() => setShowIconPicker(prev => !prev)} title="Change icon" style={{ background: '#f8f9fa', border: '1px solid #ddd', borderRadius: '8px', fontSize: '24px', padding: '6px 10px', cursor: 'pointer', lineHeight: 1 }}>{template.icon}</button>
+                  <input type="text" value={template.name} onChange={(e) => updateTemplateField(editingTemplateKey, 'name', e.target.value)} style={{ ...styles.addFormInput, flex: 1, fontSize: '18px', fontWeight: 'bold' }} />
                 </div>
                 {template.category === TEMPLATE_CATEGORIES.RECIPE && (
                   <div style={{ color: '#666', fontSize: '14px', marginTop: '5px' }}>Default servings: {template.servings || 1}</div>
+                )}
+                {showIconPicker && (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '8px', marginTop: '10px', background: '#f8f9fa', padding: '10px', borderRadius: '8px' }}>
+                    {TEMPLATE_ICONS.map(icon => (
+                      <button key={icon} onClick={() => { updateTemplateField(editingTemplateKey, 'icon', icon); setShowIconPicker(false); }} style={{ fontSize: '22px', background: template.icon === icon ? '#e9f5ff' : 'white', border: template.icon === icon ? '2px solid #007bff' : '1px solid #ddd', borderRadius: '6px', padding: '8px 0', cursor: 'pointer' }}>{icon}</button>
+                    ))}
+                  </div>
                 )}
               </div>
               <div style={{ marginBottom: '15px' }}>
@@ -452,12 +475,18 @@ export default function App() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {template.items.map((item, idx) => (
                     <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center', background: 'white', padding: '8px', borderRadius: '4px', border: '1px solid #eee' }}>
-                      <span style={{ flex: 1 }}>{item.name}{item.brand ? ` (${item.brand})` : ''}</span>
+                      {item.name ? (
+                        <span style={{ flex: 1 }}>{item.name}{item.brand ? ` (${item.brand})` : ''}</span>
+                      ) : (
+                        <input type="text" value={item.name || ''} onChange={(e) => updateTemplateItem(editingTemplateKey, idx, 'name', e.target.value)} style={{ ...styles.addFormInput, flex: 1 }} placeholder="Item name" autoFocus />
+                      )}
                       <input type="number" value={item.quantity || 0} onChange={(e) => updateTemplateItem(editingTemplateKey, idx, 'quantity', e.target.value)} style={{ ...styles.addFormInput, width: '80px' }} placeholder="Qty" min="0" step="0.01" />
                       <span style={{ color: '#666', minWidth: '40px' }}>{item.unit || ''}</span>
+                      <button onClick={() => removeItemFromTemplate(editingTemplateKey, idx)} style={{ ...styles.btn, background: '#dc3545', color: '#fff', padding: '4px 8px', fontSize: '12px' }}>×</button>
                     </div>
                   ))}
                 </div>
+                <button onClick={() => addItemToTemplate(editingTemplateKey)} style={{ ...styles.btn, ...styles.btnSecondary, padding: '8px 16px', marginTop: '10px' }}>+ Add Item</button>
               </div>
               <div style={styles.actionButtons}>
                 <button onClick={() => { saveTemplate(editingTemplateKey, template); closeTemplateEditor(); }} style={{ ...styles.btn, ...styles.btnSuccess }}>Save Changes</button>
