@@ -438,47 +438,26 @@ export default function App() {
           </div>
           {template && (
             <div>
-              <div style={{ marginBottom: '15px' }}>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Template Name</label>
-                <input type="text" value={template.name} onChange={(e) => updateTemplateField(editingTemplateKey, 'name', e.target.value)} style={styles.addFormInput} />
+              <div style={{ marginBottom: '15px', paddingBottom: '15px', borderBottom: '1px solid #eee' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ fontSize: '24px' }}>{template.icon}</span>
+                  <strong style={{ fontSize: '18px' }}>{template.name}</strong>
+                </div>
+                {template.category === TEMPLATE_CATEGORIES.RECIPE && (
+                  <div style={{ color: '#666', fontSize: '14px', marginTop: '5px' }}>Default servings: {template.servings || 1}</div>
+                )}
               </div>
-              <div style={{ display: 'flex', gap: '15px', marginBottom: '15px' }}>
-                <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Category</label>
-                  <select value={template.category || TEMPLATE_CATEGORIES.BASICS} onChange={(e) => updateTemplateField(editingTemplateKey, 'category', e.target.value)} style={styles.addFormInput}>
-                    <option value={TEMPLATE_CATEGORIES.BASICS}>Basics</option>
-                    <option value={TEMPLATE_CATEGORIES.RECIPE}>Recipe</option>
-                  </select>
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Icon</label>
-                  <input type="text" value={template.icon} onChange={(e) => updateTemplateField(editingTemplateKey, 'icon', e.target.value)} style={styles.addFormInput} placeholder="🛒" />
-                </div>
-              </div>
-              {template.category === TEMPLATE_CATEGORIES.RECIPE && (
-                <div style={{ marginBottom: '15px' }}>
-                  <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Default Servings</label>
-                  <input type="number" value={template.servings || 1} onChange={(e) => updateTemplateField(editingTemplateKey, 'servings', parseInt(e.target.value) || 1)} style={{ ...styles.addFormInput, width: '100px' }} min="1" />
-                </div>
-              )}
               <div style={{ marginBottom: '15px' }}>
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Items ({template.items.length})</label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '10px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {template.items.map((item, idx) => (
-                    <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center', background: 'white', padding: '8px', borderRadius: '4px', border: '1px solid #eee', flexWrap: 'wrap' }}>
-                      <input type="text" value={item.name || ''} onChange={(e) => updateTemplateItem(editingTemplateKey, idx, 'name', e.target.value)} style={{ ...styles.addFormInput, flex: 1, minWidth: '120px' }} placeholder="Item name" />
-                      <input type="text" value={item.brand || ''} onChange={(e) => updateTemplateItem(editingTemplateKey, idx, 'brand', e.target.value)} style={{ ...styles.addFormInput, width: '100px' }} placeholder="Brand" />
+                    <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center', background: 'white', padding: '8px', borderRadius: '4px', border: '1px solid #eee' }}>
+                      <span style={{ flex: 1 }}>{item.name}{item.brand ? ` (${item.brand})` : ''}</span>
                       <input type="number" value={item.quantity || 0} onChange={(e) => updateTemplateItem(editingTemplateKey, idx, 'quantity', e.target.value)} style={{ ...styles.addFormInput, width: '80px' }} placeholder="Qty" min="0" step="0.01" />
-                      <input type="text" value={item.unit || ''} onChange={(e) => updateTemplateItem(editingTemplateKey, idx, 'unit', e.target.value)} style={{ ...styles.addFormInput, width: '80px' }} placeholder="Unit" />
-                      <select value={item.produceType || ''} onChange={(e) => updateTemplateItem(editingTemplateKey, idx, 'produceType', e.target.value)} style={{ ...styles.addFormInput, width: '120px' }}>
-                        <option value="">Type</option>
-                        {PRODUCE_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
-                      </select>
-                      <button onClick={() => removeItemFromTemplate(editingTemplateKey, idx)} style={{ ...styles.btn, background: '#dc3545', color: '#fff', padding: '4px 8px', fontSize: '12px' }}>×</button>
+                      <span style={{ color: '#666', minWidth: '40px' }}>{item.unit || ''}</span>
                     </div>
                   ))}
                 </div>
-                <button onClick={() => addItemToTemplate(editingTemplateKey)} style={{ ...styles.btn, ...styles.btnSecondary, padding: '8px 16px' }}>+ Add Item</button>
               </div>
               <div style={styles.actionButtons}>
                 <button onClick={() => { saveTemplate(editingTemplateKey, template); closeTemplateEditor(); }} style={{ ...styles.btn, ...styles.btnSuccess }}>Save Changes</button>
