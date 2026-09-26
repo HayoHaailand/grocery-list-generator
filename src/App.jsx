@@ -145,6 +145,7 @@ export default function App() {
   const [showItemDatabase, setShowItemDatabase] = useState(false);
   const [showTemplateEditor, setShowTemplateEditor] = useState(false);
   const [showIconPicker, setShowIconPicker] = useState(false);
+  const [newItemId, setNewItemId] = useState(null);
   const [editingTemplateKey, setEditingTemplateKey] = useState(null);
   const [listToDelete, setListToDelete] = useState(null);
 
@@ -189,6 +190,7 @@ export default function App() {
     setShowTemplateEditor(false);
     setEditingTemplateKey(null);
     setShowIconPicker(false);
+    setNewItemId(null);
   };
 
   const startEditingTemplate = (key) => {
@@ -246,21 +248,23 @@ export default function App() {
   };
 
   const addItemToTemplate = (templateKey) => {
+    const newItem = {
+      id: generateId(),
+      name: '',
+      brand: '',
+      quantity: 0,
+      unit: '',
+      store: '',
+      produceType: ''
+    };
     setTemplates(prev => ({
       ...prev,
       [templateKey]: {
         ...prev[templateKey],
-        items: [...prev[templateKey].items, {
-          id: generateId(),
-          name: '',
-          brand: '',
-          quantity: 0,
-          unit: '',
-          store: '',
-          produceType: ''
-        }]
+        items: [...prev[templateKey].items, newItem]
       }
     }));
+    setNewItemId(newItem.id);
   };
 
   const removeItemFromTemplate = (templateKey, itemIndex) => {
@@ -475,14 +479,26 @@ export default function App() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {template.items.map((item, idx) => (
                     <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center', background: 'white', padding: '8px', borderRadius: '4px', border: '1px solid #eee' }}>
-                      {item.name ? (
-                        <span style={{ flex: 1 }}>{item.name}{item.brand ? ` (${item.brand})` : ''}</span>
+                      {item.id === newItemId ? (
+                        <input
+                          type="text"
+                          value={item.name || ''}
+                          onChange={(e) => updateTemplateItem(editingTemplateKey, idx, 'name', e.target.value)}
+                          onBlur={() => {
+                            if (!(item.name || '').trim()) removeItemFromTemplate(editingTemplateKey, idx);
+                            setNewItemId(null);
+                          }}
+                          onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
+                          style={{ ...styles.addFormInput, flex: 1 }}
+                          placeholder="Item name"
+                          autoFocus
+                        />
                       ) : (
-                        <input type="text" value={item.name || ''} onChange={(e) => updateTemplateItem(editingTemplateKey, idx, 'name', e.target.value)} style={{ ...styles.addFormInput, flex: 1 }} placeholder="Item name" autoFocus />
+                        <span style={{ flex: 1 }}>{item.name}{item.brand ? ` (${item.brand})` : ''}</span>
                       )}
                       <input type="number" value={item.quantity || 0} onChange={(e) => updateTemplateItem(editingTemplateKey, idx, 'quantity', e.target.value)} style={{ ...styles.addFormInput, width: '80px' }} placeholder="Qty" min="0" step="0.01" />
                       <span style={{ color: '#666', minWidth: '40px' }}>{item.unit || ''}</span>
-                      <button onClick={() => removeItemFromTemplate(editingTemplateKey, idx)} style={{ ...styles.btn, background: '#dc3545', color: '#fff', padding: '4px 8px', fontSize: '12px' }}>×</button>
+                      <button onClick={() => { removeItemFromTemplate(editingTemplateKey, idx); if (item.id === newItemId) setNewItemId(null); }} style={{ ...styles.btn, background: '#dc3545', color: '#fff', padding: '4px 8px', fontSize: '12px' }}>×</button>
                     </div>
                   ))}
                 </div>
