@@ -75,28 +75,35 @@ const DEFAULT_TEMPLATES = {
   }
 };
 
-const styles = {
-  container: { maxWidth: '100%', margin: '0 auto', padding: '10px' },
+const LIGHT_THEME = {
+  pageBg: '#ffffff', surface: '#ffffff', subtle: '#f8f9fa', border: '#ddd', borderLight: '#eee', text: '#212529', textMuted: '#666', highlight: '#e9f5ff', inputBg: '#ffffff', disabled: '#ccc', dangerBg: '#fee', dangerBorder: '#fcc'
+};
+const DARK_THEME = {
+  pageBg: '#1a1d21', surface: '#24282d', subtle: '#2b3035', border: '#3a3f45', borderLight: '#33383e', text: '#e8e8e8', textMuted: '#9aa0a6', highlight: '#1e3a5f', inputBg: '#2b3035', disabled: '#4a4f55', dangerBg: '#3a2020', dangerBorder: '#5a3030'
+};
+
+const makeStyles = (t) => ({
+  container: { maxWidth: '100%', margin: '0 auto', padding: '10px', background: t.pageBg, color: t.text, minHeight: '100vh' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' },
   btn: { padding: '12px 20px', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', minHeight: '44px', minWidth: '44px' },
   btnPrimary: { background: '#007bff', color: '#fff' },
   btnSecondary: { background: '#6c757d', color: '#fff' },
   btnSuccess: { background: '#28a745', color: '#fff' },
-  deleteBtn: { background: '#fee', border: '1px solid #fcc', cursor: 'pointer', color: '#666', padding: '4px 8px', borderRadius: '4px' },
-  card: { background: 'white', border: '1px solid #ddd', borderRadius: '8px', padding: '15px', cursor: 'pointer', marginBottom: '10px' },
+  deleteBtn: { background: t.dangerBg, border: `1px solid ${t.dangerBorder}`, cursor: 'pointer', color: t.textMuted, padding: '4px 8px', borderRadius: '4px' },
+  card: { background: t.surface, border: `1px solid ${t.border}`, borderRadius: '8px', padding: '15px', cursor: 'pointer', marginBottom: '10px' },
   cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' },
-  item: { display: 'flex', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #f0f0f0' },
+  item: { display: 'flex', alignItems: 'center', padding: '10px 0', borderBottom: `1px solid ${t.borderLight}` },
   checkbox: { marginRight: '12px', width: '20px', height: '20px' },
   modal: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
-  modalContent: { background: 'white', borderRadius: '8px', padding: '20px', maxWidth: '95vw', width: '95%', maxHeight: '85vh', overflowY: 'auto' },
+  modalContent: { background: t.surface, color: t.text, borderRadius: '8px', padding: '20px', maxWidth: '95vw', width: '95%', maxHeight: '85vh', overflowY: 'auto' },
   templatesGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px', marginBottom: '15px' },
-  template: { background: '#f8f9fa', border: '2px solid #e9ecef', borderRadius: '8px', padding: '15px', cursor: 'pointer', textAlign: 'center' },
-  templateSelected: { background: '#e9f5ff', borderColor: '#007bff' },
-  addForm: { display: 'flex', gap: '10px', padding: '15px', background: '#f8f9fa' },
-  addFormInput: { flex: 1, padding: '10px', border: '1px solid #ddd', borderRadius: '5px', fontSize: '16px' },
-  summaryBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', padding: '10px', background: '#f8f9fa', borderRadius: '5px' },
+  template: { background: t.subtle, border: `2px solid ${t.border}`, borderRadius: '8px', padding: '15px', cursor: 'pointer', textAlign: 'center' },
+  templateSelected: { background: t.highlight, borderColor: '#007bff' },
+  addForm: { display: 'flex', gap: '10px', padding: '15px', background: t.subtle },
+  addFormInput: { flex: 1, padding: '10px', border: `1px solid ${t.border}`, borderRadius: '5px', fontSize: '16px', background: t.inputBg, color: t.text },
+  summaryBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', padding: '10px', background: t.subtle, borderRadius: '5px' },
   actionButtons: { display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '15px', flexWrap: 'wrap' }
-};
+});
 
 const cloneItem = (item) => ({
   id: generateId(),
@@ -149,7 +156,16 @@ export default function App() {
   const [newItemId, setNewItemId] = useState(null);
   const [editingTemplateKey, setEditingTemplateKey] = useState(null);
   const [listToDelete, setListToDelete] = useState(null);
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    return saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+  const t = darkMode ? DARK_THEME : LIGHT_THEME;
+  const styles = makeStyles(t);
 
+  useEffect(() => {
+    localStorage.setItem('theme', darkMode ? 'dark' : 'light');
+  }, [darkMode]);
   useEffect(() => {
     localStorage.setItem('groceryLists', JSON.stringify(lists));
   }, [lists]);
@@ -453,24 +469,24 @@ export default function App() {
     return (
       <div style={styles.modal}>
         <div style={{ ...styles.modalContent, maxWidth: '600px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', paddingBottom: '15px', borderBottom: '1px solid #eee' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', paddingBottom: '15px', borderBottom: `1px solid ${t.borderLight}` }}>
             <h2 style={{ margin: 0 }}>Edit Template</h2>
-            <button onClick={closeTemplateEditor} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#666' }}>×</button>
+            <button onClick={closeTemplateEditor} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: t.textMuted }}>×</button>
           </div>
           {template && (
             <div>
-              <div style={{ marginBottom: '15px', paddingBottom: '15px', borderBottom: '1px solid #eee' }}>
+              <div style={{ marginBottom: '15px', paddingBottom: '15px', borderBottom: `1px solid ${t.borderLight}` }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <button onClick={() => setShowIconPicker(prev => !prev)} title="Change icon" style={{ background: '#f8f9fa', border: '1px solid #ddd', borderRadius: '8px', fontSize: '24px', padding: '6px 10px', cursor: 'pointer', lineHeight: 1 }}>{template.icon}</button>
+                  <button onClick={() => setShowIconPicker(prev => !prev)} title="Change icon" style={{ background: t.subtle, border: `1px solid ${t.border}`, borderRadius: '8px', fontSize: '24px', padding: '6px 10px', cursor: 'pointer', lineHeight: 1 }}>{template.icon}</button>
                   <input type="text" value={template.name} onChange={(e) => updateTemplateField(editingTemplateKey, 'name', e.target.value)} style={{ ...styles.addFormInput, flex: 1, fontSize: '18px', fontWeight: 'bold' }} />
                 </div>
                 {template.category === TEMPLATE_CATEGORIES.RECIPE && (
-                  <div style={{ color: '#666', fontSize: '14px', marginTop: '5px' }}>Default servings: {template.servings || 1}</div>
+                  <div style={{ color: t.textMuted, fontSize: '14px', marginTop: '5px' }}>Default servings: {template.servings || 1}</div>
                 )}
                 {showIconPicker && (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '8px', marginTop: '10px', background: '#f8f9fa', padding: '10px', borderRadius: '8px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '8px', marginTop: '10px', background: t.subtle, padding: '10px', borderRadius: '8px' }}>
                     {TEMPLATE_ICONS.map(icon => (
-                      <button key={icon} onClick={() => { updateTemplateField(editingTemplateKey, 'icon', icon); setShowIconPicker(false); }} style={{ fontSize: '22px', background: template.icon === icon ? '#e9f5ff' : 'white', border: template.icon === icon ? '2px solid #007bff' : '1px solid #ddd', borderRadius: '6px', padding: '8px 0', cursor: 'pointer' }}>{icon}</button>
+                      <button key={icon} onClick={() => { updateTemplateField(editingTemplateKey, 'icon', icon); setShowIconPicker(false); }} style={{ fontSize: '22px', background: template.icon === icon ? t.highlight : t.surface, border: template.icon === icon ? '2px solid #007bff' : `1px solid ${t.border}`, borderRadius: '6px', padding: '8px 0', cursor: 'pointer' }}>{icon}</button>
                     ))}
                   </div>
                 )}
@@ -479,7 +495,7 @@ export default function App() {
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Items ({template.items.length})</label>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {template.items.map((item, idx) => (
-                    <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center', background: 'white', padding: '8px', borderRadius: '4px', border: '1px solid #eee' }}>
+                    <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center', background: t.subtle, padding: '8px', borderRadius: '4px', border: `1px solid ${t.borderLight}` }}>
                       {item.id === newItemId ? (
                         <input
                           type="text"
@@ -498,7 +514,7 @@ export default function App() {
                         <span style={{ flex: 1 }}>{item.name}{item.brand ? ` (${item.brand})` : ''}</span>
                       )}
                       <input type="number" value={item.quantity || 0} onChange={(e) => updateTemplateItem(editingTemplateKey, idx, 'quantity', e.target.value)} style={{ ...styles.addFormInput, width: '80px' }} placeholder="Qty" min="0" step="0.01" />
-                      <span style={{ color: '#666', minWidth: '40px' }}>{item.unit || ''}</span>
+                      <span style={{ color: t.textMuted, minWidth: '40px' }}>{item.unit || ''}</span>
                       <button onClick={() => { removeItemFromTemplate(editingTemplateKey, idx); if (item.id === newItemId) setNewItemId(null); }} style={{ ...styles.btn, background: '#dc3545', color: '#fff', padding: '4px 8px', fontSize: '12px' }}>×</button>
                     </div>
                   ))}
@@ -521,22 +537,22 @@ export default function App() {
     return (
       <div style={styles.modal}>
         <div style={{ ...styles.modalContent, maxWidth: '700px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', paddingBottom: '15px', borderBottom: '1px solid #eee' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', paddingBottom: '15px', borderBottom: `1px solid ${t.borderLight}` }}>
             <h2 style={{ margin: 0 }}>Select Template to Edit</h2>
-            <button onClick={closeTemplateEditor} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#666' }}>×</button>
+            <button onClick={closeTemplateEditor} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: t.textMuted }}>×</button>
           </div>
           <div style={{ marginBottom: '20px' }}>
             <button onClick={addNewTemplate} style={{ ...styles.btn, ...styles.btnSuccess }}>+ Add New Template</button>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
             {Object.entries(templates).map(([key, template]) => (
-              <div key={key} style={{ background: '#f8f9fa', border: '1px solid #ddd', borderRadius: '8px', padding: '15px', cursor: 'pointer' }} onClick={() => startEditingTemplate(key)}>
+              <div key={key} style={{ background: t.subtle, border: `1px solid ${t.border}`, borderRadius: '8px', padding: '15px', cursor: 'pointer' }} onClick={() => startEditingTemplate(key)}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
                   <span style={{ fontSize: '20px' }}>{template.icon}</span>
                   <strong style={{ fontSize: '16px' }}>{template.name}</strong>
                 </div>
-                <div style={{ color: '#666', fontSize: '14px' }}>{template.items.length} items</div>
-                <div style={{ color: '#666', fontSize: '11px', marginTop: '5px' }}>{template.category}</div>
+                <div style={{ color: t.textMuted, fontSize: '14px' }}>{template.items.length} items</div>
+                <div style={{ color: t.textMuted, fontSize: '11px', marginTop: '5px' }}>{template.category}</div>
                 <button onClick={(e) => { e.stopPropagation(); deleteTemplate(key); }} style={{ ...styles.btn, background: '#dc3545', color: '#fff', padding: '4px 8px', fontSize: '12px', marginTop: '10px' }}>Delete Template</button>
               </div>
             ))}
@@ -562,8 +578,8 @@ export default function App() {
           <span>{doneCount}/{totalCount}</span>
         </div>
 
-        <div style={{ background: 'white', border: '1px solid #ddd', borderRadius: '8px', overflow: 'hidden' }}>
-          <div style={{ padding: '15px', borderBottom: '1px solid #eee' }}><strong>Shopping List</strong></div>
+        <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '8px', overflow: 'hidden' }}>
+          <div style={{ padding: '15px', borderBottom: `1px solid ${t.borderLight}` }}><strong>Shopping List</strong></div>
           <div style={{ padding: '15px', maxHeight: '50vh', overflowY: 'auto' }}>
             {currentList.items.length > 0 ? (
               currentList.items.map(item => (
@@ -572,12 +588,12 @@ export default function App() {
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span style={{ fontWeight: 500 }}>{item.name}</span>
-                      {item.produceType && <span style={{ fontSize: '10px', padding: '2px 6px', background: '#e9f5ff', borderRadius: '3px', color: '#007bff', fontWeight: '500' }}>{item.produceType}</span>}
+                      {item.produceType && <span style={{ fontSize: '10px', padding: '2px 6px', background: t.highlight, borderRadius: '3px', color: '#007bff', fontWeight: '500' }}>{item.produceType}</span>}
                     </div>
                     {item.brand && <div style={{ fontSize: '12px', color: '#888' }}>{item.brand}</div>}
                     {item.store && <div style={{ fontSize: '12px', color: '#888' }}>{item.store}</div>}
                   </div>
-                  <div style={{ color: '#666', fontSize: '14px', minWidth: '80px', textAlign: 'right' }}>
+                  <div style={{ color: t.textMuted, fontSize: '14px', minWidth: '80px', textAlign: 'right' }}>
                     {item.quantity !== 0 && <span>{item.quantity}{item.unit && ' ' + item.unit}</span>}
                     {item.quantity === 0 && item.unit && <span>{item.unit}</span>}
                   </div>
@@ -615,13 +631,13 @@ export default function App() {
                 <strong>{list.name}</strong>
                 <button onClick={(e) => { e.stopPropagation(); deleteList(list.id); }} style={styles.deleteBtn}>🗑️</button>
               </div>
-              <div style={{ color: '#666', fontSize: '14px' }}>{list.items.length} items • {list.items.filter(i => i.purchased).length}/{list.items.length} checked</div>
+              <div style={{ color: t.textMuted, fontSize: '14px' }}>{list.items.length} items • {list.items.filter(i => i.purchased).length}/{list.items.length} checked</div>
             </div>
           ))}
         </div>
       ) : (
         <div style={{ textAlign: 'center', padding: '40px' }}>
-          <p style={{ color: '#666' }}>No grocery lists yet</p>
+          <p style={{ color: t.textMuted }}>No grocery lists yet</p>
           <button onClick={() => setShowCreateModal(true)} style={{ ...styles.btn, ...styles.btnPrimary, marginTop: '10px' }}>+ Create Your First List</button>
         </div>
       )}
@@ -629,11 +645,11 @@ export default function App() {
       {showCreateModal && (
         <div style={styles.modal}>
           <div style={styles.modalContent}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', paddingBottom: '15px', borderBottom: '1px solid #eee' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', paddingBottom: '15px', borderBottom: `1px solid ${t.borderLight}` }}>
               <h2 style={{ margin: 0 }}>Create New List</h2>
-              <button onClick={() => setShowCreateModal(false)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#666' }}>×</button>
+              <button onClick={() => setShowCreateModal(false)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: t.textMuted }}>×</button>
             </div>
-            <p style={{ color: '#666', marginBottom: '15px' }}><strong>Select templates</strong> to combine:</p>
+            <p style={{ color: t.textMuted, marginBottom: '15px' }}><strong>Select templates</strong> to combine:</p>
             <div style={styles.templatesGrid}>
               {Object.entries(templates).map(([key, template]) => {
                 const isSelected = selectedTemplates[key] || false;
@@ -643,11 +659,11 @@ export default function App() {
                   <button key={key} onClick={(e) => { if (e.target.tagName === 'INPUT' || e.target.tagName === 'LABEL') { e.preventDefault(); e.stopPropagation(); return; } toggleTemplate(key); }} style={{ ...styles.template, ...(isSelected ? styles.templateSelected : {}) }}>
                     <div style={{ fontSize: '24px', marginBottom: '5px' }}>{template.icon}</div>
                     <div style={{ fontWeight: 500, marginBottom: '5px' }}>{template.name}</div>
-                    <div style={{ fontSize: '12px', color: '#666' }}>{template.items.length} items</div>
+                    <div style={{ fontSize: '12px', color: t.textMuted }}>{template.items.length} items</div>
                     <div style={{ fontSize: '11px', padding: '2px 6px', borderRadius: '3px', display: 'inline-block', marginTop: '5px', background: isRecipe ? '#fff3cd' : '#d1ecf1', color: isRecipe ? '#856404' : '#0c5460' }}>{template.category}</div>
                     {isRecipe && isSelected && (
                       <div style={{ marginTop: '8px' }}>
-                        <label style={{ fontSize: '12px', color: '#666' }}>
+                        <label style={{ fontSize: '12px', color: t.textMuted }}>
                           Servings:
                           <input type="number" value={servings} onChange={(e) => updateServings(key, parseInt(e.target.value) || 1)} onClick={(e) => e.stopPropagation()} style={{ width: '50px', padding: '4px', marginLeft: '5px', border: '1px solid #ccc', borderRadius: '3px' }} min="1" />
                         </label>
@@ -658,11 +674,11 @@ export default function App() {
                 );
               })}
             </div>
-            {selectedCount > 0 && <div style={styles.summaryBar}><span style={{ color: '#666' }}>Selected: {selectedCount} template(s) • {selectedItemCount} total items</span></div>}
+            {selectedCount > 0 && <div style={styles.summaryBar}><span style={{ color: t.textMuted }}>Selected: {selectedCount} template(s) • {selectedItemCount} total items</span></div>}}
             <div style={styles.actionButtons}>
               <button onClick={clearSelections} style={{ ...styles.btn, ...styles.btnSecondary }}>Clear All</button>
               <button onClick={selectAllTemplates} style={{ ...styles.btn, ...styles.btnSuccess }}>Select All</button>
-              <button onClick={createList} disabled={selectedCount === 0} style={{ ...styles.btn, background: selectedCount === 0 ? '#ccc' : '#007bff', color: 'white', cursor: selectedCount === 0 ? 'not-allowed' : 'pointer' }}>Create List</button>
+              <button onClick={createList} disabled={selectedCount === 0} style={{ ...styles.btn, background: selectedCount === 0 ? t.disabled : '#007bff', color: 'white', cursor: selectedCount === 0 ? 'not-allowed' : 'pointer' }}>Create List</button>
             </div>
           </div>
         </div>
@@ -671,9 +687,9 @@ export default function App() {
       {showItemDatabase && (
         <div style={styles.modal}>
           <div style={{ ...styles.modalContent, maxWidth: '800px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', paddingBottom: '15px', borderBottom: '1px solid #eee' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', paddingBottom: '15px', borderBottom: `1px solid ${t.borderLight}` }}>
               <h2 style={{ margin: 0 }}>Item Database</h2>
-              <button onClick={closeItemDatabase} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#666' }}>×</button>
+              <button onClick={closeItemDatabase} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: t.textMuted }}>×</button>
             </div>
             <div style={{ marginBottom: '15px' }}>
               <input type="text" value={databaseSearch} onChange={(e) => setDatabaseSearch(e.target.value)} placeholder="Search items..." style={{ ...styles.addFormInput, width: '100%' }} />
@@ -681,17 +697,17 @@ export default function App() {
             <div style={{ marginBottom: '15px' }}>
               <button onClick={addDatabaseItem} style={{ ...styles.btn, ...styles.btnSuccess }}>+ Add New Item</button>
             </div>
-            <div style={{ color: '#666', marginBottom: '10px', fontSize: '14px' }}>Total: {itemDatabase.length} items</div>
+            <div style={{ color: t.textMuted, marginBottom: '10px', fontSize: '14px' }}>Total: {itemDatabase.length} items</div>
             <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
-                  <tr style={{ background: '#f8f9fa' }}>
-                    <th style={{ padding: '10px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Item Name</th>
-                    <th style={{ padding: '10px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Brand</th>
-                    <th style={{ padding: '10px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Store</th>
-                    <th style={{ padding: '10px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Unit</th>
-                    <th style={{ padding: '10px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Type</th>
-                    <th style={{ padding: '10px', textAlign: 'center', borderBottom: '2px solid #ddd' }}>Actions</th>
+                  <tr style={{ background: t.subtle }}>
+                    <th style={{ padding: '10px', textAlign: 'left', borderBottom: `2px solid ${t.border}` }}>Item Name</th>
+                    <th style={{ padding: '10px', textAlign: 'left', borderBottom: `2px solid ${t.border}` }}>Brand</th>
+                    <th style={{ padding: '10px', textAlign: 'left', borderBottom: `2px solid ${t.border}` }}>Store</th>
+                    <th style={{ padding: '10px', textAlign: 'left', borderBottom: `2px solid ${t.border}` }}>Unit</th>
+                    <th style={{ padding: '10px', textAlign: 'left', borderBottom: `2px solid ${t.border}` }}>Type</th>
+                    <th style={{ padding: '10px', textAlign: 'center', borderBottom: `2px solid ${t.border}` }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -701,7 +717,7 @@ export default function App() {
                     (item.store || '').toLowerCase().includes(databaseSearch.toLowerCase()) ||
                     (item.produceType || '').toLowerCase().includes(databaseSearch.toLowerCase())
                   ).sort((a, b) => a.name.localeCompare(b.name)).map((item) => (
-                    <tr key={item.id} style={{ borderBottom: '1px solid #eee' }}>
+                    <tr key={item.id} style={{ borderBottom: `1px solid ${t.borderLight}` }}>
                       <td style={{ padding: '8px' }}><input type="text" value={item.name || ''} onChange={(e) => updateDatabaseItem(item.id, 'name', e.target.value)} style={{ ...styles.addFormInput, padding: '6px', fontWeight: '500' }} /></td>
                       <td style={{ padding: '8px' }}><input type="text" value={item.brand || ''} onChange={(e) => updateDatabaseItem(item.id, 'brand', e.target.value)} style={{ ...styles.addFormInput, padding: '6px' }} placeholder="-" /></td>
                       <td style={{ padding: '8px' }}><input type="text" value={item.store || ''} onChange={(e) => updateDatabaseItem(item.id, 'store', e.target.value)} style={{ ...styles.addFormInput, padding: '6px' }} placeholder="Store" /></td>
@@ -735,11 +751,11 @@ export default function App() {
       {listToDelete && (
         <div style={styles.modal}>
           <div style={styles.modalContent}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', paddingBottom: '15px', borderBottom: '1px solid #eee' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', paddingBottom: '15px', borderBottom: `1px solid ${t.borderLight}` }}>
               <h2 style={{ margin: 0 }}>Delete List</h2>
-              <button onClick={() => setListToDelete(null)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#666' }}>×</button>
+              <button onClick={() => setListToDelete(null)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: t.textMuted }}>×</button>
             </div>
-            <p style={{ color: '#666', marginBottom: '20px' }}>Are you sure you want to delete this list? This cannot be undone.</p>
+            <p style={{ color: t.textMuted, marginBottom: '20px' }}>Are you sure you want to delete this list? This cannot be undone.</p>
             <div style={styles.actionButtons}>
               <button onClick={() => setListToDelete(null)} style={{ ...styles.btn, ...styles.btnSecondary }}>Cancel</button>
               <button onClick={confirmDelete} style={{ ...styles.btn, background: '#dc3545', color: '#fff' }}>Delete</button>
