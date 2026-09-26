@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 // === CONSTANTS ===
 const PRODUCE_TYPES = ['Fruit', 'Vegetable', 'Bread', 'Meat', 'Dairy', 'Canned', 'Frozen', 'Beverage', 'Snack', 'Condiment', 'Baking', 'Other'];
 const TEMPLATE_ICONS = ['🛒', '🥛', '🍞', '🥚', '🍎', '🥬', '🍗', '🥩', '🍝', '🍛', '☕', '🧺'];
+const UNITS = ['L', 'ml', 'g', 'kg', 'cups', 'tbsp', 'tsp', 'pcs', 'cans', 'loaf', 'head', 'cloves', 'bags', 'box', 'bottle', 'bunch', 'pack'];
 
 const TEMPLATE_CATEGORIES = {
   BASICS: 'Basics',
@@ -688,6 +689,7 @@ export default function App() {
                     <th style={{ padding: '10px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Item Name</th>
                     <th style={{ padding: '10px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Brand</th>
                     <th style={{ padding: '10px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Store</th>
+                    <th style={{ padding: '10px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Unit</th>
                     <th style={{ padding: '10px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Type</th>
                     <th style={{ padding: '10px', textAlign: 'center', borderBottom: '2px solid #ddd' }}>Actions</th>
                   </tr>
@@ -703,6 +705,12 @@ export default function App() {
                       <td style={{ padding: '8px' }}><input type="text" value={item.name || ''} onChange={(e) => updateDatabaseItem(item.id, 'name', e.target.value)} style={{ ...styles.addFormInput, padding: '6px', fontWeight: '500' }} /></td>
                       <td style={{ padding: '8px' }}><input type="text" value={item.brand || ''} onChange={(e) => updateDatabaseItem(item.id, 'brand', e.target.value)} style={{ ...styles.addFormInput, padding: '6px' }} placeholder="-" /></td>
                       <td style={{ padding: '8px' }}><input type="text" value={item.store || ''} onChange={(e) => updateDatabaseItem(item.id, 'store', e.target.value)} style={{ ...styles.addFormInput, padding: '6px' }} placeholder="Store" /></td>
+                      <td style={{ padding: '8px' }}>
+                        <select value={item.unit || ''} onChange={(e) => updateDatabaseItem(item.id, 'unit', e.target.value)} style={{ ...styles.addFormInput, padding: '6px' }}>
+                          <option value="">Select unit...</option>
+                          {UNITS.map(unit => <option key={unit} value={unit}>{unit}</option>)}
+                        </select>
+                      </td>
                       <td style={{ padding: '8px' }}>
                         <select value={item.produceType || ''} onChange={(e) => updateDatabaseItem(item.id, 'produceType', e.target.value)} style={{ ...styles.addFormInput, padding: '6px' }}>
                           <option value="">Select type...</option>
