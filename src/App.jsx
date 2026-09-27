@@ -617,6 +617,7 @@ export default function App() {
       <div style={styles.header}>
         <h1>My Grocery Lists</h1>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <button onClick={() => setDarkMode(!darkMode)} title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'} style={{ ...styles.btn, background: t.subtle, color: t.text }}>{darkMode ? '☀️' : '🌙'}</button>
           <button onClick={openItemDatabase} style={{ ...styles.btn, ...styles.btnSecondary }}>Items</button>
           <button onClick={openTemplateEditor} style={{ ...styles.btn, ...styles.btnSecondary }}>Templates</button>
           <button onClick={() => setShowCreateModal(true)} style={{ ...styles.btn, ...styles.btnPrimary }}>+ New List</button>
@@ -701,13 +702,13 @@ export default function App() {
             <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
-                  <tr style={{ background: t.subtle }}>
-                    <th style={{ padding: '10px', textAlign: 'left', borderBottom: `2px solid ${t.border}` }}>Item Name</th>
-                    <th style={{ padding: '10px', textAlign: 'left', borderBottom: `2px solid ${t.border}` }}>Brand</th>
-                    <th style={{ padding: '10px', textAlign: 'left', borderBottom: `2px solid ${t.border}` }}>Store</th>
-                    <th style={{ padding: '10px', textAlign: 'left', borderBottom: `2px solid ${t.border}` }}>Unit</th>
-                    <th style={{ padding: '10px', textAlign: 'left', borderBottom: `2px solid ${t.border}` }}>Type</th>
-                    <th style={{ padding: '10px', textAlign: 'center', borderBottom: `2px solid ${t.border}` }}>Actions</th>
+                  <tr style={{ background: t.subtle, position: 'sticky', top: 0, zIndex: 1 }}>
+                    <th style={{ padding: '10px', textAlign: 'left', borderBottom: `2px solid ${t.border}`, background: t.subtle }}>Item Name</th>
+                    <th style={{ padding: '10px', textAlign: 'left', borderBottom: `2px solid ${t.border}`, background: t.subtle }}>Unit</th>
+                    <th style={{ padding: '10px', textAlign: 'left', borderBottom: `2px solid ${t.border}`, background: t.subtle }}>Type</th>
+                    <th style={{ padding: '10px', textAlign: 'left', borderBottom: `2px solid ${t.border}`, background: t.subtle }}>Brand</th>
+                    <th style={{ padding: '10px', textAlign: 'left', borderBottom: `2px solid ${t.border}`, background: t.subtle }}>Store</th>
+                    <th style={{ padding: '10px', textAlign: 'center', borderBottom: `2px solid ${t.border}`, background: t.subtle }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -719,8 +720,6 @@ export default function App() {
                   ).sort((a, b) => a.name.localeCompare(b.name)).map((item) => (
                     <tr key={item.id} style={{ borderBottom: `1px solid ${t.borderLight}` }}>
                       <td style={{ padding: '8px' }}><input type="text" value={item.name || ''} onChange={(e) => updateDatabaseItem(item.id, 'name', e.target.value)} style={{ ...styles.addFormInput, padding: '6px', fontWeight: '500' }} /></td>
-                      <td style={{ padding: '8px' }}><input type="text" value={item.brand || ''} onChange={(e) => updateDatabaseItem(item.id, 'brand', e.target.value)} style={{ ...styles.addFormInput, padding: '6px' }} placeholder="-" /></td>
-                      <td style={{ padding: '8px' }}><input type="text" value={item.store || ''} onChange={(e) => updateDatabaseItem(item.id, 'store', e.target.value)} style={{ ...styles.addFormInput, padding: '6px' }} placeholder="Store" /></td>
                       <td style={{ padding: '8px' }}>
                         <select value={item.unit || ''} onChange={(e) => updateDatabaseItem(item.id, 'unit', e.target.value)} style={{ ...styles.addFormInput, padding: '6px' }}>
                           <option value="">Select unit...</option>
@@ -733,6 +732,8 @@ export default function App() {
                           {PRODUCE_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
                         </select>
                       </td>
+                      <td style={{ padding: '8px' }}><input type="text" value={item.brand || ''} onChange={(e) => updateDatabaseItem(item.id, 'brand', e.target.value)} style={{ ...styles.addFormInput, padding: '6px' }} placeholder="-" /></td>
+                      <td style={{ padding: '8px' }}><input type="text" value={item.store || ''} onChange={(e) => updateDatabaseItem(item.id, 'store', e.target.value)} style={{ ...styles.addFormInput, padding: '6px' }} placeholder="Store" /></td>
                       <td style={{ padding: '8px', textAlign: 'center' }}>
                         <button onClick={() => deleteDatabaseItem(item.id)} style={{ ...styles.btn, background: '#dc3545', color: '#fff', padding: '4px 8px', fontSize: '12px' }}>×</button>
                       </td>
