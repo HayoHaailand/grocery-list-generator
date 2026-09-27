@@ -154,6 +154,7 @@ export default function App() {
   const [showTemplateEditor, setShowTemplateEditor] = useState(false);
   const [showIconPicker, setShowIconPicker] = useState(false);
   const [newItemId, setNewItemId] = useState(null);
+  const [autocompleteIndex, setAutocompleteIndex] = useState(-1);
   const [editingTemplateKey, setEditingTemplateKey] = useState(null);
   const [listToDelete, setListToDelete] = useState(null);
   const [darkMode, setDarkMode] = useState(() => {
@@ -264,6 +265,34 @@ export default function App() {
     });
   };
 
+  const getAutocompleteSuggestions = (query) => {
+    const q = (query || '').toLowerCase().trim();
+    if (!q) return [];
+    return itemDatabase
+      .filter(db => db.name.toLowerCase().includes(q))
+      .sort((a, b) => {
+        const aStarts = a.name.toLowerCase().startsWith(q);
+        const bStarts = b.name.toLowerCase().startsWith(q);
+        if (aStarts !== bStarts) return aStarts ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      })
+      .slice(0, 8);
+  };
+  const selectAutocompleteSuggestion = (templateKey, idx, dbItem) => {
+    setTemplates(prev => ({
+      ...prev,
+      [templateKey]: {
+        ...prev[templateKey],
+        items: prev[templateKey].items.map((item, i) =>
+          i === idx
+            ? { ...item, name: dbItem.name, brand: dbItem.brand || item.brand, unit: dbItem.unit || item.unit, store: dbItem.store || item.store, produceType: dbItem.produceType || item.produceType }
+            : item
+        )
+      }
+    }));
+    setAutocompleteIndex(-1);
+    setNewItemId(null);
+  };
   const addItemToTemplate = (templateKey) => {
     const newItem = {
       id: generateId(),
@@ -496,21 +525,51 @@ export default function App() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {template.items.map((item, idx) => (
                     <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center', background: t.subtle, padding: '8px', borderRadius: '4px', border: `1px solid ${t.borderLight}` }}>
-                      {item.id === newItemId ? (
-                        <input
-                          type="text"
-                          value={item.name || ''}
-                          onChange={(e) => updateTemplateItem(editingTemplateKey, idx, 'name', e.target.value)}
-                          onBlur={() => {
-                            if (!(item.name || '').trim()) removeItemFromTemplate(editingTemplateKey, idx);
-                            setNewItemId(null);
-                          }}
-                          onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
-                          style={{ ...styles.addFormInput, flex: 1 }}
-                          placeholder="Item name"
-                          autoFocus
-                        />
-                      ) : (
+                      {item.id === newItemId ? (() => {
+                        const suggestions = getAutocompleteSuggestions(item.name);
+                        return (
+                          <div style={{ flex: 1, position: 'relative' }}>
+                            <input
+                              type="text"
+                              value={item.name || ''}
+                              onChange={(e) => { updateTemplateItem(editingTemplateKey, idx, 'name', e.target.value); setAutocompleteIndex(-1); }}
+                              onBlur={() => {
+                                setTimeout(() => {
+                                  if (!(item.name || '').trim()) removeItemFromTemplate(editingTemplateKey, idx);
+                                  setNewItemId(null);
+                                  setAutocompleteIndex(-1);
+                                }, 150);
+                              }}
+                              onKeyDown={(e) => {
+                                if (suggestions.length > 0) {
+                                  if (e.key === 'ArrowDown') { e.preventDefault(); setAutocompleteIndex(prev => Math.min(prev + 1, suggestions.length - 1)); return; }
+                                  if (e.key === 'ArrowUp') { e.preventDefault(); setAutocompleteIndex(prev => Math.max(prev - 1, 0)); return; }
+                                  if (e.key === 'Enter' && autocompleteIndex >= 0) { e.preventDefault(); selectAutocompleteSuggestion(editingTemplateKey, idx, suggestions[autocompleteIndex]); return; }
+                                }
+                                if (e.key === 'Enter') e.target.blur();
+                              }}
+                              style={{ ...styles.addFormInput, width: '100%' }}
+                              placeholder="Item name"
+                              autoFocus
+                            />
+                            {suggestions.length > 0 && (
+                              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: t.surface, border: `1px solid ${t.border}`, borderRadius: '5px', marginTop: '2px', zIndex: 100, maxHeight: '240px', overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+                                {suggestions.map((db, sIdx) => (
+                                  <div
+                                    key={db.id}
+                                    onMouseDown={(e) => { e.preventDefault(); selectAutocompleteSuggestion(editingTemplateKey, idx, db); }}
+                                    onMouseEnter={() => setAutocompleteIndex(sIdx)}
+                                    style={{ padding: '10px 12px', cursor: 'pointer', background: sIdx === autocompleteIndex ? t.highlight : 'transparent', color: t.text, fontSize: '14px', display: 'flex', justifyContent: 'space-between', gap: '8px' }}
+                                  >
+                                    <span>{db.name}</span>
+                                    <span style={{ color: t.textMuted, fontSize: '12px' }}>{[db.produceType, db.unit].filter(Boolean).join(' • ')}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })() : (
                         <span style={{ flex: 1 }}>{item.name}{item.brand ? ` (${item.brand})` : ''}</span>
                       )}
                       <input type="number" value={item.quantity || 0} onChange={(e) => updateTemplateItem(editingTemplateKey, idx, 'quantity', e.target.value)} style={{ ...styles.addFormInput, width: '80px' }} placeholder="Qty" min="0" step="0.01" />
