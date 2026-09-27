@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 
 // === CONSTANTS ===
-const PRODUCE_TYPES = ['Fruit', 'Vegetable', 'Bread', 'Meat', 'Dairy', 'Canned', 'Frozen', 'Beverage', 'Snack', 'Condiment', 'Baking', 'Other'];
+const PRODUCE_TYPES = ['Fruit', 'Vegetable', 'Bread', 'Breakfast', 'Carbohydrates', 'Meat', 'Dairy', 'Canned', 'Frozen', 'Beverage', 'Snack', 'Condiment', 'Baking', 'Other'];
 const TEMPLATE_ICONS = ['🛒', '🥛', '🍞', '🥚', '🍎', '🥬', '🍗', '🥩', '🍝', '🍛', '☕', '🧺'];
-const UNITS = ['L', 'ml', 'g', 'kg', 'cups', 'tbsp', 'tsp', 'pcs', 'cans', 'loaf', 'head', 'cloves', 'bags', 'box', 'bottle', 'bunch', 'pack'];
+const UNITS = ['L', 'ml', 'g', 'kg', 'cups', 'tbsp', 'tsp', 'pcs', 'cans', 'loaf', 'Rolls', 'head', 'cloves', 'bags', 'box', 'bottle', 'bunch', 'pack'];
 
 const TEMPLATE_CATEGORIES = {
   BASICS: 'Basics',
@@ -177,6 +177,31 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem('itemDatabase', JSON.stringify(itemDatabase));
+  }, [itemDatabase]);
+
+  useEffect(() => {
+    if (itemDatabase.length === 0) return;
+    setTemplates(prev => {
+      let changed = false;
+      const next = {};
+      Object.entries(prev).forEach(([key, template]) => {
+        const items = template.items.map(item => {
+          const db = itemDatabase.find(db => db.name.toLowerCase().trim() === (item.name || '').toLowerCase().trim());
+          if (!db) return item;
+          const updated = {
+            ...item,
+            unit: db.unit || item.unit,
+            produceType: db.produceType || item.produceType,
+            brand: db.brand || item.brand,
+            store: db.store || item.store
+          };
+          if (updated !== item && JSON.stringify(updated) !== JSON.stringify(item)) changed = true;
+          return updated;
+        });
+        next[key] = { ...template, items };
+      });
+      return changed ? next : prev;
+    });
   }, [itemDatabase]);
 
   useEffect(() => {
