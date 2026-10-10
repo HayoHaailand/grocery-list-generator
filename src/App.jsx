@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { RECEIPT_ITEMS, RECEIPT_PRICE_UPDATES } from './receiptItems';
 
 // === CONSTANTS ===
-const PRODUCE_TYPES = ['Fruit', 'Vegetable', 'Bread', 'Meat', 'Dairy', 'Canned', 'Frozen', 'Beverage', 'Snack', 'Condiment', 'Baking', 'Other'];
+const PRODUCE_TYPES = ['Fruit', 'Vegetable', 'Bread', 'Breakfast', 'Carbohydrates', 'Meat', 'Dairy', 'Canned', 'Frozen', 'Beverage', 'Snack', 'Condiment', 'Baking', 'Other'];
 const TEMPLATE_ICONS = ['🛒', '🥛', '🍞', '🥚', '🍎', '🥬', '🍗', '🥩', '🍝', '🍛', '☕', '🧺'];
-const UNITS = ['L', 'ml', 'g', 'kg', 'cups', 'tbsp', 'tsp', 'pcs', 'cans', 'loaf', 'head', 'cloves', 'bags', 'box', 'bottle', 'bunch', 'pack'];
+const UNITS = ['L', 'ml', 'g', 'kg', 'cups', 'tbsp', 'tsp', 'pcs', 'cans', 'loaf', 'Rolls', 'head', 'cloves', 'bags', 'box', 'bottle', 'bunch', 'pack'];
 
 const TEMPLATE_CATEGORIES = {
   BASICS: 'Basics',
@@ -159,13 +159,21 @@ export default function App() {
     return buildItemDatabase(templates);
   });
 
+  const [purchaseHistory, setPurchaseHistory] = useState(() => {
+    const saved = localStorage.getItem('purchaseHistory');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [currentListId, setCurrentListId] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedTemplates, setSelectedTemplates] = useState({});
   const [templateServings, setTemplateServings] = useState({});
+  const [smartSuggestions, setSmartSuggestions] = useState({});
   const [newItemName, setNewItemName] = useState('');
   const [databaseSearch, setDatabaseSearch] = useState('');
   const [showItemDatabase, setShowItemDatabase] = useState(false);
+  const [showDataView, setShowDataView] = useState(false);
+  const [dataTab, setDataTab] = useState('export');
+  const [importStatus, setImportStatus] = useState(null);
   const [showTemplateEditor, setShowTemplateEditor] = useState(false);
   const [showIconPicker, setShowIconPicker] = useState(false);
   const [newItemId, setNewItemId] = useState(null);
@@ -195,11 +203,99 @@ export default function App() {
   }, [itemDatabase]);
 
   useEffect(() => {
+    localStorage.setItem('purchaseHistory', JSON.stringify(purchaseHistory));
+  }, [purchaseHistory]);
+
+  useEffect(() => {
+    if (itemDatabase.length === 0) return;
+    setTemplates(prev => {
+      let changed = false;
+      const next = {};
+      Object.entries(prev).forEach(([key, template]) => {
+        const items = template.items.map(item => {
+          const db = itemDatabase.find(db => db.name.toLowerCase().trim() === (item.name || '').toLowerCase().trim());
+          if (!db) return item;
+          const updated = {
+            ...item,
+            unit: db.unit || item.unit,
+            produceType: db.produceType || item.produceType,
+            brand: db.brand || item.brand,
+            store: db.store || item.store
+          };
+          if (updated !== item && JSON.stringify(updated) !== JSON.stringify(item)) changed = true;
+          return updated;
+        });
+        next[key] = { ...template, items };
+      });
+      return changed ? next : prev;
+    });
+  }, [itemDatabase]);
+
+  useEffect(() => {
     if (itemDatabase.length === 0) {
       setItemDatabase(buildItemDatabase(templates));
     }
   }, [templates]);
 
+  // Data export/import helpers
+  const getExportData = () => ({
+    groceryLists: lists,
+    groceryTemplates: templates,
+    itemDatabase: itemDatabase,
+    purchaseHistory: purchaseHistory,
+    theme: darkMode ? 'dark' : 'light',
+    exportedAt: new Date().toISOString()
+  });
+
+  const copyDataToClipboard = async (json) => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(json);
+        setImportStatus('Copied to clipboard');
+      } else {
+        throw new Error('clipboard unavailable');
+      }
+    } catch (err) {
+      setImportStatus('Copy failed — select the text manually');
+    }
+  };
+
+  const downloadData = (json) => {
+    try {
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const ts = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `grocery-data-backup-${ts}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setImportStatus('Backup downloaded');
+    } catch (err) {
+      setImportStatus('Download failed');
+    }
+  };
+
+  const importData = (file) => {
+    setImportStatus(null);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        if (Array.isArray(data.groceryLists)) setLists(data.groceryLists);
+        if (data.groceryTemplates && typeof data.groceryTemplates === 'object') setTemplates(data.groceryTemplates);
+        if (Array.isArray(data.itemDatabase)) setItemDatabase(data.itemDatabase);
+        if (Array.isArray(data.purchaseHistory)) setPurchaseHistory(data.purchaseHistory);
+        if (data.theme) setDarkMode(data.theme === 'dark');
+        setImportStatus('Data imported successfully');
+      } catch (err) {
+        setImportStatus('Import failed — not a valid backup file');
+      }
+    };
+    reader.readAsText(file);
+  };
   useEffect(() => {
     const RECEIPT_ITEMS_VERSION = 1;
     if (parseInt(localStorage.getItem('receiptItemsVersion') || '0', 10) >= RECEIPT_ITEMS_VERSION) return;
@@ -408,7 +504,36 @@ export default function App() {
       return listItem;
     });
 
-    const sortedItems = [...matchedItems].sort((a, b) => {
+      const merged = [];
+    matchedItems.forEach(item => {
+      if (!item.name || !item.name.trim()) {
+        if (merged.length === 0 || merged[merged.length - 1].name) merged.push(item);
+        return;
+      }
+      const key = `${item.name.toLowerCase().trim()}|${item.unit || ''}`;
+      const existing = merged.find(m => m.name && `${m.name.toLowerCase().trim()}|${m.unit || ''}` === key);
+      if (existing) {
+        existing.quantity = (existing.quantity || 0) + (item.quantity || 0);
+      } else {
+        merged.push(item);
+      }
+    });
+
+    const smartAdditions = Object.entries(smartSuggestions).filter(([, on]) => on).map(([name, on]) => {
+      const u = getSmartSuggestions().find(s => s.name === name);
+      const dbItem = itemDatabase.find(db => db.name.toLowerCase().trim() === name);
+      return cloneItem({
+        name: (dbItem && dbItem.name) || name,
+        brand: (dbItem && dbItem.brand) || '',
+        quantity: u ? Math.round(u.avgQty * 10) / 10 : 0,
+        unit: (u && u.unit) || (dbItem && dbItem.unit) || '',
+        store: (dbItem && dbItem.store) || '',
+        produceType: (dbItem && dbItem.produceType) || '',
+        purchased: false
+      });
+    }).filter(item => !merged.some(m => m.name && m.name.toLowerCase().trim() === item.name.toLowerCase().trim()));
+
+    const sortedItems = [...merged, ...smartAdditions].sort((a, b) => {
       const typeA = (a.produceType || '').toLowerCase();
       const typeB = (b.produceType || '').toLowerCase();
       if (typeA < typeB) return -1;
@@ -420,6 +545,7 @@ export default function App() {
     setLists([...lists, newList]);
     setSelectedTemplates({});
     setTemplateServings({});
+    setSmartSuggestions({});
     setShowCreateModal(false);
   };
 
@@ -458,10 +584,59 @@ export default function App() {
   const toggleItem = (listId, itemId) => {
     setLists(lists.map(list => {
       if (list.id === listId) {
-        return { ...list, items: list.items.map(item => item.id === itemId ? { ...item, purchased: !item.purchased } : item) };
+        return { ...list, items: list.items.map(item => {
+          if (item.id !== itemId) return item;
+          if (!item.purchased && item.name && item.name.trim()) {
+            setPurchaseHistory(prev => [...prev, {
+              id: generateId(),
+              name: item.name.toLowerCase().trim(),
+              quantity: item.quantity || 0,
+              unit: item.unit || '',
+              date: new Date().toISOString()
+            }]);
+          }
+          return { ...item, purchased: !item.purchased };
+        }) };
       }
       return list;
     }));
+  };
+
+  const getWeeklyUsage = () => {
+    const now = new Date();
+    const usage = {};
+    purchaseHistory.forEach(entry => {
+      const d = new Date(entry.date);
+      const ageDays = Math.max(0, (now - d) / (1000 * 60 * 60 * 24));
+      const decay = Math.pow(0.94, ageDays);
+      const weekKey = Math.floor(ageDays / 7);
+      if (!usage[entry.name]) {
+        usage[entry.name] = { name: entry.name, unit: entry.unit, weeks: {}, totalWeight: 0, totalQty: 0 };
+      }
+      const u = usage[entry.name];
+      if (entry.unit) u.unit = entry.unit;
+      u.weeks[weekKey] = (u.weeks[weekKey] || 0) + decay;
+      u.totalWeight += decay;
+      u.totalQty += decay * (entry.quantity || 0);
+    });
+    return Object.values(usage).filter(u => u.totalWeight > 0).map(u => ({
+      ...u,
+      frequency: u.totalWeight,
+      avgQty: u.totalWeight > 0 ? u.totalQty / u.totalWeight : 0
+    })).sort((a, b) => b.frequency - a.frequency);
+  };
+
+  const getSmartSuggestions = () => {
+    const usage = getWeeklyUsage();
+    const templateItemNames = new Set();
+    Object.entries(selectedTemplates).forEach(([key, isSelected]) => {
+      if (isSelected && templates[key]) {
+        templates[key].items.forEach(item => {
+          if (item.name) templateItemNames.add(item.name.toLowerCase().trim());
+        });
+      }
+    });
+    return usage.filter(u => !templateItemNames.has(u.name)).slice(0, 10);
   };
 
   const deleteItem = (listId, itemId) => {
@@ -714,6 +889,7 @@ export default function App() {
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           <button onClick={() => setDarkMode(!darkMode)} title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'} style={{ ...styles.btn, background: t.subtle, color: t.text }}>{darkMode ? '☀️' : '🌙'}</button>
           <button onClick={openItemDatabase} style={{ ...styles.btn, ...styles.btnSecondary }}>Items</button>
+          <button onClick={() => { setShowDataView(true); setImportStatus(null); }} style={{ ...styles.btn, ...styles.btnSecondary }}>Data</button>
           <button onClick={openTemplateEditor} style={{ ...styles.btn, ...styles.btnSecondary }}>Templates</button>
           <button onClick={() => setShowCreateModal(true)} style={{ ...styles.btn, ...styles.btnPrimary }}>+ New List</button>
         </div>
@@ -770,6 +946,30 @@ export default function App() {
                 );
               })}
             </div>
+            {(() => {
+              const suggestions = getSmartSuggestions();
+              if (suggestions.length === 0) return null;
+              return (
+                <div style={{ marginTop: '15px', padding: '12px', background: t.subtle, border: `1px solid ${t.border}`, borderRadius: '8px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 500, marginBottom: '8px', color: t.text }}>
+                    🧠 Based on your shopping habits
+                    <span style={{ color: t.textMuted, fontWeight: 400 }}> — items you regularly buy but didn't select a template for. Check what you need this week:</span>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {suggestions.map(s => {
+                      const checked = smartSuggestions[s.name] || false;
+                      const label = s.avgQty > 0 && s.unit ? `${s.name} (~${Math.round(s.avgQty * 10) / 10} ${s.unit}/wk)` : s.name;
+                      return (
+                        <label key={s.name} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '4px 10px', background: checked ? t.highlight : t.surface, border: `1px solid ${checked ? '#007bff' : t.border}`, borderRadius: '12px', cursor: 'pointer', fontSize: '13px', color: t.text }}>
+                          <input type="checkbox" checked={checked} onChange={() => setSmartSuggestions(prev => ({ ...prev, [s.name]: !prev[s.name] }))} style={styles.checkbox} />
+                          {label}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
             {selectedCount > 0 && <div style={styles.summaryBar}><span style={{ color: t.textMuted }}>Selected: {selectedCount} template(s) • {selectedItemCount} total items</span></div>}}
             <div style={styles.actionButtons}>
               <button onClick={clearSelections} style={{ ...styles.btn, ...styles.btnSecondary }}>Clear All</button>
@@ -803,7 +1003,6 @@ export default function App() {
                     <th style={{ padding: '10px', textAlign: 'left', borderBottom: `2px solid ${t.border}`, background: t.subtle }}>Type</th>
                     <th style={{ padding: '10px', textAlign: 'left', borderBottom: `2px solid ${t.border}`, background: t.subtle }}>Brand</th>
                     <th style={{ padding: '10px', textAlign: 'left', borderBottom: `2px solid ${t.border}`, background: t.subtle }}>Store</th>
-                    <th style={{ padding: '10px', textAlign: 'left', borderBottom: `2px solid ${t.border}`, background: t.subtle }}>Price (€)</th>
                     <th style={{ padding: '10px', textAlign: 'center', borderBottom: `2px solid ${t.border}`, background: t.subtle }}>Actions</th>
                   </tr>
                 </thead>
@@ -830,7 +1029,6 @@ export default function App() {
                       </td>
                       <td style={{ padding: '8px' }}><input type="text" value={item.brand || ''} onChange={(e) => updateDatabaseItem(item.id, 'brand', e.target.value)} style={{ ...styles.addFormInput, padding: '6px' }} placeholder="-" /></td>
                       <td style={{ padding: '8px' }}><input type="text" value={item.store || ''} onChange={(e) => updateDatabaseItem(item.id, 'store', e.target.value)} style={{ ...styles.addFormInput, padding: '6px' }} placeholder="Store" /></td>
-                      <td style={{ padding: '8px' }}><input type="number" step="0.01" min="0" value={item.price || ''} onChange={(e) => updateDatabaseItem(item.id, 'price', parseFloat(e.target.value) || '')} style={{ ...styles.addFormInput, padding: '6px' }} placeholder="-" title={item.priceDate ? `Last bought ${item.priceDate}` : ''} /></td>
                       <td style={{ padding: '8px', textAlign: 'center' }}>
                         <button onClick={() => deleteDatabaseItem(item.id)} style={{ ...styles.btn, background: '#dc3545', color: '#fff', padding: '4px 8px', fontSize: '12px' }}>×</button>
                       </td>
@@ -846,6 +1044,43 @@ export default function App() {
         </div>
       )}
 
+      {showDataView && (() => {
+        const exportJson = JSON.stringify(getExportData(), null, 2);
+        return (
+          <div style={styles.modal}>
+            <div style={{ ...styles.modalContent, maxWidth: '800px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', paddingBottom: '15px', borderBottom: `1px solid ${t.borderLight}` }}>
+                <h2 style={{ margin: 0 }}>Stored Data</h2>
+                <button onClick={() => setShowDataView(false)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: t.textMuted }}>×</button>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '15px' }}>
+                <button onClick={() => setDataTab('export')} style={{ ...styles.btn, ...(dataTab === 'export' ? styles.btnPrimary : styles.btnSecondary) }}>View / Backup</button>
+                <button onClick={() => setDataTab('import')} style={{ ...styles.btn, ...(dataTab === 'import' ? styles.btnPrimary : styles.btnSecondary) }}>Import</button>
+              </div>
+              {dataTab === 'export' ? (
+                <div>
+                  <div style={{ color: t.textMuted, fontSize: '13px', marginBottom: '10px' }}>
+                    All data is stored locally in your browser (localStorage): {lists.length} lists · {Object.keys(templates).length} templates · {itemDatabase.length} items · {purchaseHistory.length} history entries.
+                  </div>
+                  <textarea readOnly value={exportJson} onFocus={(e) => e.target.select()} style={{ ...styles.addFormInput, width: '100%', height: '300px', fontFamily: 'monospace', fontSize: '12px', resize: 'vertical' }} />
+                  <div style={{ ...styles.actionButtons, justifyContent: 'flex-start' }}>
+                    <button onClick={() => copyDataToClipboard(exportJson)} style={{ ...styles.btn, ...styles.btnSecondary }}>Copy</button>
+                    <button onClick={() => downloadData(exportJson)} style={{ ...styles.btn, ...styles.btnPrimary }}>Download backup</button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ color: t.textMuted, fontSize: '13px', marginBottom: '10px' }}>
+                    Restore from a backup file. This replaces your current lists, templates, items and history.
+                  </div>
+                  <input type="file" accept="application/json,.json" onChange={(e) => { if (e.target.files && e.target.files[0]) importData(e.target.files[0]); e.target.value = ''; }} style={{ ...styles.addFormInput, width: '100%', padding: '10px' }} />
+                  {importStatus && <div style={{ marginTop: '10px', padding: '8px 12px', borderRadius: '5px', background: importStatus.includes('failed') || importStatus.includes('Copy') ? '#f8d7da' : '#d4edda', color: importStatus.includes('failed') || importStatus.includes('Copy') ? '#721c24' : '#155724', fontSize: '14px' }}>{importStatus}</div>}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
       {listToDelete && (
         <div style={styles.modal}>
           <div style={styles.modalContent}>
