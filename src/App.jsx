@@ -144,10 +144,16 @@ export default function App() {
     return allItems;
   });
 
+  const [purchaseHistory, setPurchaseHistory] = useState(() => {
+    const saved = localStorage.getItem('purchaseHistory');
+    return saved ? JSON.parse(saved) : [];
+  });
+
   const [currentListId, setCurrentListId] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedTemplates, setSelectedTemplates] = useState({});
   const [templateServings, setTemplateServings] = useState({});
+  const [smartSuggestions, setSmartSuggestions] = useState({});
   const [newItemName, setNewItemName] = useState('');
   const [databaseSearch, setDatabaseSearch] = useState('');
   const [showItemDatabase, setShowItemDatabase] = useState(false);
@@ -178,6 +184,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('itemDatabase', JSON.stringify(itemDatabase));
   }, [itemDatabase]);
+
+  useEffect(() => {
+    localStorage.setItem('purchaseHistory', JSON.stringify(purchaseHistory));
+  }, [purchaseHistory]);
 
   useEffect(() => {
     if (itemDatabase.length === 0) return;
@@ -397,7 +407,36 @@ export default function App() {
       return listItem;
     });
 
-    const sortedItems = [...matchedItems].sort((a, b) => {
+      const merged = [];
+    matchedItems.forEach(item => {
+      if (!item.name || !item.name.trim()) {
+        if (merged.length === 0 || merged[merged.length - 1].name) merged.push(item);
+        return;
+      }
+      const key = `${item.name.toLowerCase().trim()}|${item.unit || ''}`;
+      const existing = merged.find(m => m.name && `${m.name.toLowerCase().trim()}|${m.unit || ''}` === key);
+      if (existing) {
+        existing.quantity = (existing.quantity || 0) + (item.quantity || 0);
+      } else {
+        merged.push(item);
+      }
+    });
+
+    const smartAdditions = Object.entries(smartSuggestions).filter(([, on]) => on).map(([name, on]) => {
+      const u = getSmartSuggestions().find(s => s.name === name);
+      const dbItem = itemDatabase.find(db => db.name.toLowerCase().trim() === name);
+      return cloneItem({
+        name: (dbItem && dbItem.name) || name,
+        brand: (dbItem && dbItem.brand) || '',
+        quantity: u ? Math.round(u.avgQty * 10) / 10 : 0,
+        unit: (u && u.unit) || (dbItem && dbItem.unit) || '',
+        store: (dbItem && dbItem.store) || '',
+        produceType: (dbItem && dbItem.produceType) || '',
+        purchased: false
+      });
+    }).filter(item => !merged.some(m => m.name && m.name.toLowerCase().trim() === item.name.toLowerCase().trim()));
+
+    const sortedItems = [...merged, ...smartAdditions].sort((a, b) => {
       const typeA = (a.produceType || '').toLowerCase();
       const typeB = (b.produceType || '').toLowerCase();
       if (typeA < typeB) return -1;
@@ -409,6 +448,7 @@ export default function App() {
     setLists([...lists, newList]);
     setSelectedTemplates({});
     setTemplateServings({});
+    setSmartSuggestions({});
     setShowCreateModal(false);
   };
 
@@ -447,10 +487,59 @@ export default function App() {
   const toggleItem = (listId, itemId) => {
     setLists(lists.map(list => {
       if (list.id === listId) {
-        return { ...list, items: list.items.map(item => item.id === itemId ? { ...item, purchased: !item.purchased } : item) };
+        return { ...list, items: list.items.map(item => {
+          if (item.id !== itemId) return item;
+          if (!item.purchased && item.name && item.name.trim()) {
+            setPurchaseHistory(prev => [...prev, {
+              id: generateId(),
+              name: item.name.toLowerCase().trim(),
+              quantity: item.quantity || 0,
+              unit: item.unit || '',
+              date: new Date().toISOString()
+            }]);
+          }
+          return { ...item, purchased: !item.purchased };
+        }) };
       }
       return list;
     }));
+  };
+
+  const getWeeklyUsage = () => {
+    const now = new Date();
+    const usage = {};
+    purchaseHistory.forEach(entry => {
+      const d = new Date(entry.date);
+      const ageDays = Math.max(0, (now - d) / (1000 * 60 * 60 * 24));
+      const decay = Math.pow(0.94, ageDays);
+      const weekKey = Math.floor(ageDays / 7);
+      if (!usage[entry.name]) {
+        usage[entry.name] = { name: entry.name, unit: entry.unit, weeks: {}, totalWeight: 0, totalQty: 0 };
+      }
+      const u = usage[entry.name];
+      if (entry.unit) u.unit = entry.unit;
+      u.weeks[weekKey] = (u.weeks[weekKey] || 0) + decay;
+      u.totalWeight += decay;
+      u.totalQty += decay * (entry.quantity || 0);
+    });
+    return Object.values(usage).filter(u => u.totalWeight > 0).map(u => ({
+      ...u,
+      frequency: u.totalWeight,
+      avgQty: u.totalWeight > 0 ? u.totalQty / u.totalWeight : 0
+    })).sort((a, b) => b.frequency - a.frequency);
+  };
+
+  const getSmartSuggestions = () => {
+    const usage = getWeeklyUsage();
+    const templateItemNames = new Set();
+    Object.entries(selectedTemplates).forEach(([key, isSelected]) => {
+      if (isSelected && templates[key]) {
+        templates[key].items.forEach(item => {
+          if (item.name) templateItemNames.add(item.name.toLowerCase().trim());
+        });
+      }
+    });
+    return usage.filter(u => !templateItemNames.has(u.name)).slice(0, 10);
   };
 
   const deleteItem = (listId, itemId) => {
@@ -759,6 +848,30 @@ export default function App() {
                 );
               })}
             </div>
+            {(() => {
+              const suggestions = getSmartSuggestions();
+              if (suggestions.length === 0) return null;
+              return (
+                <div style={{ marginTop: '15px', padding: '12px', background: t.subtle, border: `1px solid ${t.border}`, borderRadius: '8px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 500, marginBottom: '8px', color: t.text }}>
+                    🧠 Based on your shopping habits
+                    <span style={{ color: t.textMuted, fontWeight: 400 }}> — items you regularly buy but didn't select a template for. Check what you need this week:</span>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {suggestions.map(s => {
+                      const checked = smartSuggestions[s.name] || false;
+                      const label = s.avgQty > 0 && s.unit ? `${s.name} (~${Math.round(s.avgQty * 10) / 10} ${s.unit}/wk)` : s.name;
+                      return (
+                        <label key={s.name} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '4px 10px', background: checked ? t.highlight : t.surface, border: `1px solid ${checked ? '#007bff' : t.border}`, borderRadius: '12px', cursor: 'pointer', fontSize: '13px', color: t.text }}>
+                          <input type="checkbox" checked={checked} onChange={() => setSmartSuggestions(prev => ({ ...prev, [s.name]: !prev[s.name] }))} style={styles.checkbox} />
+                          {label}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
             {selectedCount > 0 && <div style={styles.summaryBar}><span style={{ color: t.textMuted }}>Selected: {selectedCount} template(s) • {selectedItemCount} total items</span></div>}}
             <div style={styles.actionButtons}>
               <button onClick={clearSelections} style={{ ...styles.btn, ...styles.btnSecondary }}>Clear All</button>
