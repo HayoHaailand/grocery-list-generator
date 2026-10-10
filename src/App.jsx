@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { RECEIPT_ITEMS, RECEIPT_PRICE_UPDATES } from './receiptItems';
 
 // === CONSTANTS ===
 const PRODUCE_TYPES = ['Fruit', 'Vegetable', 'Bread', 'Breakfast', 'Carbohydrates', 'Meat', 'Dairy', 'Canned', 'Frozen', 'Beverage', 'Snack', 'Condiment', 'Baking', 'Other'];
@@ -11,6 +12,31 @@ const TEMPLATE_CATEGORIES = {
 };
 
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
+
+const RECEIPT_STORE = 'Lidl';
+
+const buildItemDatabase = (templates) => {
+  const allItems = [];
+  const seen = new Set();
+  Object.values(templates).forEach(template => {
+    template.items.forEach(item => {
+      const key = item.name.toLowerCase().trim();
+      if (!seen.has(key)) {
+        seen.add(key);
+        const update = RECEIPT_PRICE_UPDATES[key];
+        allItems.push({ id: generateId(), name: item.name, brand: '', store: update ? RECEIPT_STORE : '', produceType: item.produceType || '', quantity: 0, unit: '', price: update ? update.price : '', priceDate: update ? update.priceDate : '', timesBought: update ? update.timesBought : '' });
+      }
+    });
+  });
+  RECEIPT_ITEMS.forEach(item => {
+    const key = item.name.toLowerCase().trim();
+    if (!seen.has(key)) {
+      seen.add(key);
+      allItems.push({ id: generateId(), name: item.name, brand: '', store: RECEIPT_STORE, produceType: item.produceType, quantity: 0, unit: item.unit || '', price: item.price, priceDate: item.priceDate, timesBought: item.timesBought });
+    }
+  });
+  return allItems;
+};
 
 const DEFAULT_TEMPLATES = {
   empty: { name: 'Empty List', icon: '📝', category: TEMPLATE_CATEGORIES.BASICS, items: [] },
@@ -130,18 +156,7 @@ export default function App() {
   const [itemDatabase, setItemDatabase] = useState(() => {
     const saved = localStorage.getItem('itemDatabase');
     if (saved) return JSON.parse(saved);
-    const allItems = [];
-    const seen = new Set();
-    Object.values(DEFAULT_TEMPLATES).forEach(template => {
-      template.items.forEach(item => {
-        const key = item.name.toLowerCase().trim();
-        if (!seen.has(key)) {
-          seen.add(key);
-          allItems.push({ id: generateId(), name: item.name, brand: '', store: '', produceType: item.produceType || '', quantity: 0, unit: '' });
-        }
-      });
-    });
-    return allItems;
+    return buildItemDatabase(templates);
   });
 
   const [purchaseHistory, setPurchaseHistory] = useState(() => {
@@ -218,18 +233,7 @@ export default function App() {
 
   useEffect(() => {
     if (itemDatabase.length === 0) {
-      const allItems = [];
-      const seen = new Set();
-      Object.values(templates).forEach(template => {
-        template.items.forEach(item => {
-          const key = item.name.toLowerCase().trim();
-          if (!seen.has(key)) {
-            seen.add(key);
-            allItems.push({ id: generateId(), name: item.name, brand: '', store: '', produceType: item.produceType || '', quantity: 0, unit: '' });
-          }
-        });
-      });
-      if (allItems.length > 0) setItemDatabase(allItems);
+      setItemDatabase(buildItemDatabase(templates));
     }
   }, [templates]);
 
@@ -292,6 +296,37 @@ export default function App() {
     };
     reader.readAsText(file);
   };
+  useEffect(() => {
+    const RECEIPT_ITEMS_VERSION = 1;
+    if (parseInt(localStorage.getItem('receiptItemsVersion') || '0', 10) >= RECEIPT_ITEMS_VERSION) return;
+    setItemDatabase(prev => {
+      const byName = new Map(prev.map(i => [i.name.toLowerCase().trim(), i]));
+      const next = [...prev];
+      const applyUpdate = (item, update, store) => {
+        item.price = update.price;
+        item.priceDate = update.priceDate;
+        item.timesBought = update.timesBought;
+        if (store && !item.store) item.store = store;
+      };
+      Object.entries(RECEIPT_PRICE_UPDATES).forEach(([key, update]) => {
+        const existing = byName.get(key);
+        if (existing) applyUpdate(existing, update, '');
+      });
+      RECEIPT_ITEMS.forEach(item => {
+        const key = item.name.toLowerCase().trim();
+        const existing = byName.get(key);
+        if (existing) {
+          applyUpdate(existing, item, RECEIPT_STORE);
+        } else {
+          const added = { id: generateId(), name: item.name, brand: '', store: RECEIPT_STORE, produceType: item.produceType, quantity: 0, unit: item.unit || '', price: item.price, priceDate: item.priceDate, timesBought: item.timesBought };
+          byName.set(key, added);
+          next.push(added);
+        }
+      });
+      return next;
+    });
+    localStorage.setItem('receiptItemsVersion', '1');
+  }, []);
 
   const currentList = lists.find(l => l.id === currentListId);
 
