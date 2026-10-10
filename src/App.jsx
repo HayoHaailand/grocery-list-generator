@@ -148,7 +148,6 @@ export default function App() {
     const saved = localStorage.getItem('purchaseHistory');
     return saved ? JSON.parse(saved) : [];
   });
-
   const [currentListId, setCurrentListId] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedTemplates, setSelectedTemplates] = useState({});
@@ -157,6 +156,9 @@ export default function App() {
   const [newItemName, setNewItemName] = useState('');
   const [databaseSearch, setDatabaseSearch] = useState('');
   const [showItemDatabase, setShowItemDatabase] = useState(false);
+  const [showDataView, setShowDataView] = useState(false);
+  const [dataTab, setDataTab] = useState('export');
+  const [importStatus, setImportStatus] = useState(null);
   const [showTemplateEditor, setShowTemplateEditor] = useState(false);
   const [showIconPicker, setShowIconPicker] = useState(false);
   const [newItemId, setNewItemId] = useState(null);
@@ -230,6 +232,66 @@ export default function App() {
       if (allItems.length > 0) setItemDatabase(allItems);
     }
   }, [templates]);
+
+  // Data export/import helpers
+  const getExportData = () => ({
+    groceryLists: lists,
+    groceryTemplates: templates,
+    itemDatabase: itemDatabase,
+    purchaseHistory: purchaseHistory,
+    theme: darkMode ? 'dark' : 'light',
+    exportedAt: new Date().toISOString()
+  });
+
+  const copyDataToClipboard = async (json) => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(json);
+        setImportStatus('Copied to clipboard');
+      } else {
+        throw new Error('clipboard unavailable');
+      }
+    } catch (err) {
+      setImportStatus('Copy failed — select the text manually');
+    }
+  };
+
+  const downloadData = (json) => {
+    try {
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const ts = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `grocery-data-backup-${ts}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setImportStatus('Backup downloaded');
+    } catch (err) {
+      setImportStatus('Download failed');
+    }
+  };
+
+  const importData = (file) => {
+    setImportStatus(null);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        if (Array.isArray(data.groceryLists)) setLists(data.groceryLists);
+        if (data.groceryTemplates && typeof data.groceryTemplates === 'object') setTemplates(data.groceryTemplates);
+        if (Array.isArray(data.itemDatabase)) setItemDatabase(data.itemDatabase);
+        if (Array.isArray(data.purchaseHistory)) setPurchaseHistory(data.purchaseHistory);
+        if (data.theme) setDarkMode(data.theme === 'dark');
+        setImportStatus('Data imported successfully');
+      } catch (err) {
+        setImportStatus('Import failed — not a valid backup file');
+      }
+    };
+    reader.readAsText(file);
+  };
 
   const currentList = lists.find(l => l.id === currentListId);
 
@@ -792,6 +854,7 @@ export default function App() {
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           <button onClick={() => setDarkMode(!darkMode)} title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'} style={{ ...styles.btn, background: t.subtle, color: t.text }}>{darkMode ? '☀️' : '🌙'}</button>
           <button onClick={openItemDatabase} style={{ ...styles.btn, ...styles.btnSecondary }}>Items</button>
+          <button onClick={() => { setShowDataView(true); setImportStatus(null); }} style={{ ...styles.btn, ...styles.btnSecondary }}>Data</button>
           <button onClick={openTemplateEditor} style={{ ...styles.btn, ...styles.btnSecondary }}>Templates</button>
           <button onClick={() => setShowCreateModal(true)} style={{ ...styles.btn, ...styles.btnPrimary }}>+ New List</button>
         </div>
@@ -946,6 +1009,43 @@ export default function App() {
         </div>
       )}
 
+      {showDataView && (() => {
+        const exportJson = JSON.stringify(getExportData(), null, 2);
+        return (
+          <div style={styles.modal}>
+            <div style={{ ...styles.modalContent, maxWidth: '800px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', paddingBottom: '15px', borderBottom: `1px solid ${t.borderLight}` }}>
+                <h2 style={{ margin: 0 }}>Stored Data</h2>
+                <button onClick={() => setShowDataView(false)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: t.textMuted }}>×</button>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '15px' }}>
+                <button onClick={() => setDataTab('export')} style={{ ...styles.btn, ...(dataTab === 'export' ? styles.btnPrimary : styles.btnSecondary) }}>View / Backup</button>
+                <button onClick={() => setDataTab('import')} style={{ ...styles.btn, ...(dataTab === 'import' ? styles.btnPrimary : styles.btnSecondary) }}>Import</button>
+              </div>
+              {dataTab === 'export' ? (
+                <div>
+                  <div style={{ color: t.textMuted, fontSize: '13px', marginBottom: '10px' }}>
+                    All data is stored locally in your browser (localStorage): {lists.length} lists · {Object.keys(templates).length} templates · {itemDatabase.length} items · {purchaseHistory.length} history entries.
+                  </div>
+                  <textarea readOnly value={exportJson} onFocus={(e) => e.target.select()} style={{ ...styles.addFormInput, width: '100%', height: '300px', fontFamily: 'monospace', fontSize: '12px', resize: 'vertical' }} />
+                  <div style={{ ...styles.actionButtons, justifyContent: 'flex-start' }}>
+                    <button onClick={() => copyDataToClipboard(exportJson)} style={{ ...styles.btn, ...styles.btnSecondary }}>Copy</button>
+                    <button onClick={() => downloadData(exportJson)} style={{ ...styles.btn, ...styles.btnPrimary }}>Download backup</button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ color: t.textMuted, fontSize: '13px', marginBottom: '10px' }}>
+                    Restore from a backup file. This replaces your current lists, templates, items and history.
+                  </div>
+                  <input type="file" accept="application/json,.json" onChange={(e) => { if (e.target.files && e.target.files[0]) importData(e.target.files[0]); e.target.value = ''; }} style={{ ...styles.addFormInput, width: '100%', padding: '10px' }} />
+                  {importStatus && <div style={{ marginTop: '10px', padding: '8px 12px', borderRadius: '5px', background: importStatus.includes('failed') || importStatus.includes('Copy') ? '#f8d7da' : '#d4edda', color: importStatus.includes('failed') || importStatus.includes('Copy') ? '#721c24' : '#155724', fontSize: '14px' }}>{importStatus}</div>}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
       {listToDelete && (
         <div style={styles.modal}>
           <div style={styles.modalContent}>
