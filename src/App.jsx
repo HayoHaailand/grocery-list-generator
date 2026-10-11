@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { RECEIPT_ITEMS, RECEIPT_PRICE_UPDATES } from './receiptItems';
 import { detectStore, parseReceiptLines } from './receiptScanner';
+import { recognizeReceipt } from './receiptOcr';
 
 // === CONSTANTS ===
 const PRODUCE_TYPES = ['Fruit', 'Vegetable', 'Bread', 'Breakfast', 'Carbohydrates', 'Meat', 'Dairy', 'Canned', 'Frozen', 'Beverage', 'Snack', 'Condiment', 'Baking', 'Other'];
@@ -386,8 +387,9 @@ export default function App() {
     setReceiptScanStatus('Scanning receipt...');
     setReceiptItems(null);
     try {
-      const { default: Tesseract } = await import('tesseract.js');
-      const result = await Tesseract.recognize(imageSrc, 'eng');
+      const result = await recognizeReceipt(imageSrc, (progress) => {
+        setReceiptScanStatus(`Scanning receipt... ${Math.round(progress * 100)}%`);
+      });
       processReceiptText(result.data.text || '');
     } catch (err) {
       setReceiptScanStatus('Scan failed — try again or use a clearer image.');

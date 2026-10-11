@@ -68,7 +68,8 @@ const parsePrice = (rawLine) => {
   const price = parseFloat(m[1].replace(',', '.'));
   if (isNaN(price)) return null;
   const name = line.substring(0, line.length - m[0].length).trim();
-  return { price, name };
+  const cleanName = name.replace(/[|\u2022\u00b7\u00b0]/g, '').replace(/\s+/g, ' ').trim();
+  return { price, name: cleanName };
 };
 
 const parseQuantity = (name) => {
@@ -106,6 +107,7 @@ const parseReceiptLines = (text) => {
   const seen = new Set();
   text.split(/\r?\n/).forEach(rawLine => {
     const line = rawLine.replace(/\s+/g, ' ').trim();
+    if (/[a-z]{2,}\s+[a-z]{2,}\s+[a-z]{2,}\s+[a-z]{2,}\s+[a-z]{2,}/i.test(line) && !/\d/.test(line)) return;
     if (line.length < 3) return;
     if (isNoise(line)) return;
 
