@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { RECEIPT_ITEMS, RECEIPT_PRICE_UPDATES } from './receiptItems';
+import { detectStore, parseReceiptLines } from './receiptScanner';
 
 // === CONSTANTS ===
 const PRODUCE_TYPES = ['Fruit', 'Vegetable', 'Bread', 'Breakfast', 'Carbohydrates', 'Meat', 'Dairy', 'Canned', 'Frozen', 'Beverage', 'Snack', 'Condiment', 'Baking', 'Other'];
@@ -14,6 +15,16 @@ const TEMPLATE_CATEGORIES = {
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
 
 const RECEIPT_STORE = 'Lidl';
+
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const toISODate = (d) => d.toISOString().slice(0, 10);
+const getNextPurchaseDate = (frequencyWeeks, fromDate) =>
+  toISODate(new Date(new Date(fromDate).getTime() + frequencyWeeks * WEEK_MS));
+const getWeeksUntil = (isoDate) => {
+  if (!isoDate) return null;
+  const days = Math.ceil((new Date(isoDate) - new Date(toISODate(new Date()))) / (24 * 60 * 60 * 1000));
+  return Math.max(0, Math.ceil(days / 7));
+};
 
 const buildItemDatabase = (templates) => {
   const allItems = [];
@@ -180,6 +191,12 @@ export default function App() {
   const [autocompleteIndex, setAutocompleteIndex] = useState(-1);
   const [editingTemplateKey, setEditingTemplateKey] = useState(null);
   const [listToDelete, setListToDelete] = useState(null);
+  const [showReceiptScanner, setShowReceiptScanner] = useState(false);
+  const [receiptImage, setReceiptImage] = useState(null);
+  const [receiptScanStatus, setReceiptScanStatus] = useState(null);
+  const [receiptStore, setReceiptStore] = useState('');
+  const [receiptItems, setReceiptItems] = useState(null);
+  const [receiptDate, setReceiptDate] = useState(() => toISODate(new Date()));
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem('theme');
     return saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -329,6 +346,113 @@ export default function App() {
   }, []);
 
   const currentList = lists.find(l => l.id === currentListId);
+
+  const normalizeName = (name) => (name || '').toLowerCase().trim();
+
+  const getDbItem = (name) =>
+    itemDatabase.find(db => normalizeName(db.name) === normalizeName(name));
+
+  const updateReceiptItem = (idx, field, value) => {
+    setReceiptItems(prev => prev.map((item, i) => i === idx ? { ...item, [field]: value } : item));
+  };
+
+  const startReceiptScan = () => {
+    setShowReceiptScanner(true);
+    setReceiptImage(null);
+    setReceiptScanStatus(null);
+    setReceiptItems(null);
+    setReceiptStore('');
+    setReceiptDate(toISODate(new Date()));
+  };
+
+  const closeReceiptScanner = () => {
+    setShowReceiptScanner(false);
+    setReceiptImage(null);
+    setReceiptScanStatus(null);
+    setReceiptItems(null);
+    setReceiptStore('');
+  };
+
+  const processReceiptText = (text) => {
+    const store = detectStore(text);
+    const items = parseReceiptLines(text);
+    setReceiptStore(store);
+    setReceiptItems(items);
+    setReceiptScanStatus(items.length === 0 ? 'No items recognized — check image quality or enter manually.' : null);
+  };
+
+  const scanReceiptImage = async (imageSrc) => {
+    setReceiptImage(imageSrc);
+    setReceiptScanStatus('Scanning receipt...');
+    setReceiptItems(null);
+    try {
+      const { default: Tesseract } = await import('tesseract.js');
+      const result = await Tesseract.recognize(imageSrc, 'eng');
+      processReceiptText(result.data.text || '');
+    } catch (err) {
+      setReceiptScanStatus('Scan failed — try again or use a clearer image.');
+    }
+  };
+
+  const handleReceiptFile = (file) => {
+    const reader = new FileReader();
+    reader.onload = (e) => scanReceiptImage(e.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  const confirmReceipt = () => {
+    const purchaseDate = receiptDate || toISODate(new Date());
+    const included = (receiptItems || []).filter(item => item.include && (item.name || '').trim());
+
+    setItemDatabase(prev => {
+      const next = [...prev];
+      included.forEach(ri => {
+        const idx = next.findIndex(db => normalizeName(db.name) === normalizeName(ri.name));
+        const freq = ri.frequencyChoice === 'oneOff' ? 0 : (parseInt(ri.frequencyWeeks, 10) || 0);
+        const nextPurchaseDate = freq > 0 ? getNextPurchaseDate(freq, purchaseDate) : '';
+        if (idx >= 0) {
+          next[idx] = {
+            ...next[idx],
+            store: receiptStore || next[idx].store,
+            quantity: ri.quantity || next[idx].quantity,
+            unit: ri.unit || next[idx].unit,
+            price: ri.price !== undefined ? ri.price : next[idx].price,
+            priceDate: purchaseDate,
+            lastPurchasedDate: purchaseDate,
+            frequencyWeeks: freq,
+            nextPurchaseDate
+          };
+        } else {
+          next.push({
+            id: generateId(),
+            name: ri.name.trim(),
+            brand: '',
+            store: receiptStore,
+            produceType: '',
+            quantity: ri.quantity,
+            unit: ri.unit,
+            price: ri.price,
+            priceDate: purchaseDate,
+            lastPurchasedDate: purchaseDate,
+            frequencyWeeks: freq,
+            nextPurchaseDate
+          });
+        }
+      });
+      return next;
+    });
+
+    setPurchaseHistory(prev => [...prev, ...included.map(ri => ({
+      id: generateId(),
+      name: normalizeName(ri.name),
+      quantity: ri.quantity,
+      unit: ri.unit,
+      date: new Date(purchaseDate).toISOString(),
+      store: receiptStore
+    }))]);
+
+    closeReceiptScanner();
+  };
 
   // Template Editor Functions
   const openTemplateEditor = () => {
@@ -626,6 +750,21 @@ export default function App() {
     })).sort((a, b) => b.frequency - a.frequency);
   };
 
+  const getDueItems = () => {
+    const today = new Date(toISODate(new Date()));
+    return itemDatabase
+      .filter(db => db.nextPurchaseDate && new Date(db.nextPurchaseDate) <= new Date(today.getTime() + WEEK_MS))
+      .map(db => ({
+        name: db.name.toLowerCase().trim(),
+        unit: db.unit,
+        avgQty: db.quantity || 0,
+        dueIn: getWeeksUntil(db.nextPurchaseDate),
+        nextPurchaseDate: db.nextPurchaseDate,
+        frequencyWeeks: db.frequencyWeeks
+      }))
+      .sort((a, b) => (a.nextPurchaseDate || '').localeCompare(b.nextPurchaseDate || ''));
+  };
+
   const getSmartSuggestions = () => {
     const usage = getWeeklyUsage();
     const templateItemNames = new Set();
@@ -636,7 +775,8 @@ export default function App() {
         });
       }
     });
-    return usage.filter(u => !templateItemNames.has(u.name)).slice(0, 10);
+    const due = getDueItems().filter(u => !templateItemNames.has(u.name));
+    return [...due, ...usage.filter(u => !templateItemNames.has(u.name) && !due.some(d => d.name === u.name))].slice(0, 10);
   };
 
   const deleteItem = (listId, itemId) => {
@@ -888,6 +1028,7 @@ export default function App() {
         <h1>My Grocery Lists</h1>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           <button onClick={() => setDarkMode(!darkMode)} title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'} style={{ ...styles.btn, background: t.subtle, color: t.text }}>{darkMode ? '☀️' : '🌙'}</button>
+          <button onClick={startReceiptScan} title="Scan a receipt after shopping" style={{ ...styles.btn, ...styles.btnSecondary }}>📷 Scan Receipt</button>
           <button onClick={openItemDatabase} style={{ ...styles.btn, ...styles.btnSecondary }}>Items</button>
           <button onClick={() => { setShowDataView(true); setImportStatus(null); }} style={{ ...styles.btn, ...styles.btnSecondary }}>Data</button>
           <button onClick={openTemplateEditor} style={{ ...styles.btn, ...styles.btnSecondary }}>Templates</button>
@@ -1003,6 +1144,7 @@ export default function App() {
                     <th style={{ padding: '10px', textAlign: 'left', borderBottom: `2px solid ${t.border}`, background: t.subtle }}>Type</th>
                     <th style={{ padding: '10px', textAlign: 'left', borderBottom: `2px solid ${t.border}`, background: t.subtle }}>Brand</th>
                     <th style={{ padding: '10px', textAlign: 'left', borderBottom: `2px solid ${t.border}`, background: t.subtle }}>Store</th>
+                    <th style={{ padding: '10px', textAlign: 'left', borderBottom: `2px solid ${t.border}`, background: t.subtle }}>Buy Again</th>
                     <th style={{ padding: '10px', textAlign: 'center', borderBottom: `2px solid ${t.border}`, background: t.subtle }}>Actions</th>
                   </tr>
                 </thead>
@@ -1029,6 +1171,31 @@ export default function App() {
                       </td>
                       <td style={{ padding: '8px' }}><input type="text" value={item.brand || ''} onChange={(e) => updateDatabaseItem(item.id, 'brand', e.target.value)} style={{ ...styles.addFormInput, padding: '6px' }} placeholder="-" /></td>
                       <td style={{ padding: '8px' }}><input type="text" value={item.store || ''} onChange={(e) => updateDatabaseItem(item.id, 'store', e.target.value)} style={{ ...styles.addFormInput, padding: '6px' }} placeholder="Store" /></td>
+                      <td style={{ padding: '8px', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                        {item.frequencyWeeks > 0 ? (
+                          <span>
+                            {item.nextPurchaseDate ? (
+                              getWeeksUntil(item.nextPurchaseDate) === 0
+                                ? <span style={{ color: '#155724', fontWeight: 500 }}>Due now</span>
+                                : <span style={{ color: t.textMuted }}>in {getWeeksUntil(item.nextPurchaseDate)} wk</span>
+                            ) : ''}
+                            <span style={{ color: t.textMuted, display: 'block', fontSize: '11px' }}>every {item.frequencyWeeks} wk</span>
+                          </span>
+                        ) : item.frequencyWeeks === 0 ? (
+                          <span style={{ color: t.textMuted }}>one-off</span>
+                        ) : (
+                          <input type="number" min="0" max="52" value={''} onChange={(e) => {
+                            const freq = parseInt(e.target.value, 10);
+                            if (!isNaN(freq)) {
+                              setItemDatabase(prev => prev.map(db => db.id === item.id ? {
+                                ...db,
+                                frequencyWeeks: freq,
+                                nextPurchaseDate: freq > 0 && db.lastPurchasedDate ? getNextPurchaseDate(freq, db.lastPurchasedDate) : ''
+                              } : db));
+                            }
+                          }} placeholder="-" style={{ ...styles.addFormInput, width: '50px', padding: '4px' }} />
+                        )}
+                      </td>
                       <td style={{ padding: '8px', textAlign: 'center' }}>
                         <button onClick={() => deleteDatabaseItem(item.id)} style={{ ...styles.btn, background: '#dc3545', color: '#fff', padding: '4px 8px', fontSize: '12px' }}>×</button>
                       </td>
@@ -1081,6 +1248,93 @@ export default function App() {
           </div>
         );
       })()}
+      {showReceiptScanner && (
+        <div style={styles.modal}>
+          <div style={{ ...styles.modalContent, maxWidth: '700px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', paddingBottom: '15px', borderBottom: `1px solid ${t.borderLight}` }}>
+              <h2 style={{ margin: 0 }}>Scan Receipt</h2>
+              <button onClick={closeReceiptScanner} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: t.textMuted }}>×</button>
+            </div>
+
+            {!receiptItems ? (
+              <div>
+                <p style={{ color: t.textMuted, marginBottom: '15px' }}>Take a picture of your receipt or upload an image. The app detects the store and finds the items for you.</p>
+                <label style={{ ...styles.btn, ...styles.btnPrimary, display: 'inline-block' }}>
+                  📷 Take Photo
+                  <input type="file" accept="image/*" capture="environment" hidden onChange={(e) => { if (e.target.files && e.target.files[0]) handleReceiptFile(e.target.files[0]); e.target.value = ''; }} />
+                </label>
+                {' '}
+                <label style={{ ...styles.btn, ...styles.btnSecondary, display: 'inline-block', marginLeft: '8px' }}>
+                  📁 Upload Image
+                  <input type="file" accept="image/*" hidden onChange={(e) => { if (e.target.files && e.target.files[0]) handleReceiptFile(e.target.files[0]); e.target.value = ''; }} />
+                </label>
+                {receiptImage && <img src={receiptImage} alt="Receipt" style={{ maxWidth: '100%', maxHeight: '250px', marginTop: '15px', borderRadius: '8px', border: `1px solid ${t.border}` }} />}
+                {receiptScanStatus && <div style={{ marginTop: '15px', padding: '10px 12px', borderRadius: '5px', background: t.subtle, color: t.textMuted, fontSize: '14px' }}>{receiptScanStatus}</div>}
+              </div>
+            ) : (
+              <div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '15px', alignItems: 'center' }}>
+                  <label style={{ fontWeight: 500 }}>Store:</label>
+                  <input type="text" value={receiptStore} onChange={(e) => setReceiptStore(e.target.value)} placeholder="Store name" style={{ ...styles.addFormInput, width: '150px' }} />
+                  <label style={{ fontWeight: 500 }}>Date:</label>
+                  <input type="date" value={receiptDate} onChange={(e) => setReceiptDate(e.target.value)} style={{ ...styles.addFormInput, width: '160px' }} />
+                </div>
+                <div style={{ color: t.textMuted, fontSize: '13px', marginBottom: '12px' }}>
+                  {receiptItems.length === 0 ? 'No items found.' : 'Confirm the items you bought. For each item choose how often you buy it:'}
+                </div>
+                {receiptItems.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '45vh', overflowY: 'auto' }}>
+                    {receiptItems.map((ri, idx) => {
+                      const dbItem = getDbItem(ri.name);
+                      const hasFrequency = dbItem && Number.isInteger(dbItem.frequencyWeeks) && dbItem.frequencyWeeks > 0;
+                      const knownOneOff = dbItem && dbItem.frequencyWeeks === 0;
+                      return (
+                        <div key={idx} style={{ background: t.subtle, padding: '10px', borderRadius: '6px', border: `1px solid ${ri.include ? t.border : t.borderLight}`, opacity: ri.include ? 1 : 0.5 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <input type="checkbox" checked={ri.include} onChange={() => updateReceiptItem(idx, 'include', !ri.include)} style={styles.checkbox} />
+                            <input type="text" value={ri.name} onChange={(e) => updateReceiptItem(idx, 'name', e.target.value)} style={{ ...styles.addFormInput, flex: 1, minWidth: '140px', fontWeight: 500 }} />
+                            <input type="number" value={ri.quantity} min="0" step="0.01" onChange={(e) => updateReceiptItem(idx, 'quantity', parseFloat(e.target.value) || 0)} style={{ ...styles.addFormInput, width: '70px' }} />
+                            <span style={{ color: t.textMuted, minWidth: '36px' }}>{ri.unit || ''}</span>
+                            {ri.price !== undefined && <span style={{ color: t.textMuted, fontSize: '13px' }}>€{ri.price.toFixed(2)}</span>}
+                          </div>
+                          {ri.include && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px', marginLeft: '32px', flexWrap: 'wrap' }}>
+                              {hasFrequency ? (
+                                <span style={{ fontSize: '13px', color: '#155724', background: '#d4edda', padding: '4px 10px', borderRadius: '12px' }}>
+                                  ✓ Every {dbItem.frequencyWeeks} week{dbItem.frequencyWeeks > 1 ? 's' : ''} (existing)
+                                </span>
+                              ) : (
+                                <>
+                                  {knownOneOff && <span style={{ fontSize: '13px', color: t.textMuted }}>Previously one-off</span>}
+                                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '13px', cursor: 'pointer' }}>
+                                    <input type="radio" name={`freq-${idx}`} checked={ri.frequencyChoice === 'oneOff'} onChange={() => updateReceiptItem(idx, 'frequencyChoice', 'oneOff')} />
+                                    One-off
+                                  </label>
+                                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '13px', cursor: 'pointer' }}>
+                                    <input type="radio" name={`freq-${idx}`} checked={ri.frequencyChoice === 'weeks'} onChange={() => updateReceiptItem(idx, 'frequencyChoice', 'weeks')} />
+                                    Every
+                                    <input type="number" min="1" max="52" value={ri.frequencyWeeks || ''} onChange={(e) => { updateReceiptItem(idx, 'frequencyWeeks', e.target.value); }} placeholder="2" style={{ ...styles.addFormInput, width: '50px', padding: '4px' }} />
+                                    weeks
+                                  </label>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <div style={styles.actionButtons}>
+                  <button onClick={closeReceiptScanner} style={{ ...styles.btn, ...styles.btnSecondary }}>Cancel</button>
+                  <button onClick={() => scanReceiptImage(receiptImage)} disabled={!receiptImage} style={{ ...styles.btn, ...styles.btnSecondary, cursor: receiptImage ? 'pointer' : 'not-allowed' }}>Rescan</button>
+                  <button onClick={confirmReceipt} disabled={receiptItems.filter(i => i.include).length === 0} style={{ ...styles.btn, ...styles.btnSuccess }}>Confirm & Save</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {listToDelete && (
         <div style={styles.modal}>
           <div style={styles.modalContent}>
