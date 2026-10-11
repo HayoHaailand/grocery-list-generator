@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { RECEIPT_ITEMS, RECEIPT_PRICE_UPDATES } from './receiptItems';
 import { detectStore, parseReceiptLines } from './receiptScanner';
 import { recognizeReceipt } from './receiptOcr';
@@ -193,6 +193,7 @@ export default function App() {
   const [editingTemplateKey, setEditingTemplateKey] = useState(null);
   const [listToDelete, setListToDelete] = useState(null);
   const [showReceiptScanner, setShowReceiptScanner] = useState(false);
+  const receiptFileInputRef = useRef(null);
   const [receiptImage, setReceiptImage] = useState(null);
   const [receiptScanStatus, setReceiptScanStatus] = useState(null);
   const [receiptStore, setReceiptStore] = useState('');
@@ -1261,15 +1262,39 @@ export default function App() {
             {!receiptItems ? (
               <div>
                 <p style={{ color: t.textMuted, marginBottom: '15px' }}>Take a picture of your receipt or upload an image. The app detects the store and finds the items for you.</p>
-                <label style={{ ...styles.btn, ...styles.btnPrimary, display: 'inline-block' }}>
+                <input
+                  ref={receiptFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => { const f = e.target.files && e.target.files[0]; if (f) handleReceiptFile(f); e.target.value = ''; }}
+                  style={{ position: 'absolute', width: '1px', height: '1px', opacity: 0, overflow: 'hidden' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const input = receiptFileInputRef.current;
+                    if (!input) return;
+                    input.removeAttribute('capture');
+                    input.setAttribute('capture', 'environment');
+                    input.click();
+                  }}
+                  style={{ ...styles.btn, ...styles.btnPrimary }}
+                >
                   📷 Take Photo
-                  <input type="file" accept="image/*" capture="environment" hidden onChange={(e) => { if (e.target.files && e.target.files[0]) handleReceiptFile(e.target.files[0]); e.target.value = ''; }} />
-                </label>
+                </button>
                 {' '}
-                <label style={{ ...styles.btn, ...styles.btnSecondary, display: 'inline-block', marginLeft: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const input = receiptFileInputRef.current;
+                    if (!input) return;
+                    input.removeAttribute('capture');
+                    input.click();
+                  }}
+                  style={{ ...styles.btn, ...styles.btnSecondary, marginLeft: '8px' }}
+                >
                   📁 Upload Image
-                  <input type="file" accept="image/*" hidden onChange={(e) => { if (e.target.files && e.target.files[0]) handleReceiptFile(e.target.files[0]); e.target.value = ''; }} />
-                </label>
+                </button>
                 {receiptImage && <img src={receiptImage} alt="Receipt" style={{ maxWidth: '100%', maxHeight: '250px', marginTop: '15px', borderRadius: '8px', border: `1px solid ${t.border}` }} />}
                 {receiptScanStatus && <div style={{ marginTop: '15px', padding: '10px 12px', borderRadius: '5px', background: t.subtle, color: t.textMuted, fontSize: '14px' }}>{receiptScanStatus}</div>}
               </div>
